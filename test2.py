@@ -9,7 +9,7 @@ from google.cloud import language_v1
 import torch
 from dotenv import load_dotenv
 
-
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "C:/finalproj/finalproject-466106-c573b3aefa34.json"
 
 load_dotenv(override=True)
 # print(os.getenv('OPENAI_API_KEY'))
@@ -33,7 +33,6 @@ MODEL_NAME = os.getenv("OPENAI_AUDIO_MODEL", "openai/whisper-small")
 def transcribe_audio_with_whisper(audio_path, model_name=MODEL_NAME, language="ko"):
     from transformers import pipeline
     import torch
-
     pipe = pipeline(
         "automatic-speech-recognition",
         model=model_name,  # 환경변수에서 불러온 모델명 사용
@@ -54,12 +53,26 @@ def extract_places_with_gcp_nlp(text):
     places = [entity.name for entity in entities if language_v1.Entity.Type(entity.type_).name == "LOCATION"]
     return list(set(places))
 
+STOPWORDS = {"오늘", "내일", "여기", "저기", "거기"}
+def clean_place_candidates(places):
+    cleaned = []
+    for p in places:
+        p2 = p.strip()
+        if not p2 or p2 in STOPWORDS:
+            continue
+        # 너무 일반적인 단어 걸러내기
+        if len(p2) <= 1:
+            continue
+        cleaned.append(p2)
+    print(f"[clean] {len(cleaned)} cleaned place names (from {len(places)})")
+    return cleaned
+
 def geocode_place(place):
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {"address": place, "key": Maps_API_KEY}
     resp = requests.get(url, params=params)
-    print(f"Querying {place} -> status code: {resp.status_code}")
-    print("API response:", resp.json())
+    # print(f"Querying {place} -> status code: {resp.status_code}")
+    # print("API response:", resp.json())
     if resp.status_code == 200:
         results = resp.json().get("results", [])
         if results:
@@ -75,11 +88,12 @@ def main():
     download_youtube_audio(youtube_url, audio_file)
 
     print("2. Whisper로 음성 텍스트 변환 중...")
-    text = transcribe_audio_with_whisper(audio_file, model_name="openai/whisper-large-v3", language="ko")
+    text = transcribe_audio_with_whisper(audio_file, model_name="openai/whisper-small", language="ko")
     print("\n[Whisper 텍스트 결과]\n", text)
 
     print("3. Google Cloud NLP로 장소명 추출 중...")
     places = extract_places_with_gcp_nlp(text)
+    places = list(set(places))
     print("추출된 장소:", places)
 
     print("4. 각 장소를 Google Maps로 좌표 변환 중...")
@@ -89,15 +103,17 @@ def main():
     print("\n[장소-좌표 매핑 JSON]\n", json_data)
 
     print("\n[Google Maps 쿼리 URL]")
+    printed_places = set()
     for item in places_with_coords:
+        if item["place"] in printed_places:
+            continue  # 이미 출력된 장소는 건너뛰기
+        printed_places.add(item["place"])
         if item["lat"] and item["lng"]:
-            # 좌표를 사용하여 Google Maps 검색 URL
             url = f"https://www.google.com/maps/search/?api=1&query={item['lat']},{item['lng']}"
         else:
-            # 좌표를 사용할 수 없는 경우 장소 이름으로 검색
             url = f"https://www.google.com/maps/search/?api=1&query={item['place']}"
         print(f"{item['place']}: {url}")
-
+    
     # 필요시 오디오 파일 삭제
     os.remove(audio_file)
 

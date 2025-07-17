@@ -79,7 +79,7 @@ def main():
     download_youtube_audio(youtube_url, audio_file)
 
     print("2. Whisper로 음성 텍스트 변환 중...")
-    text = transcribe_audio_with_whisper(audio_file, model_name="openai/whisper-large-v3", language="ko")
+    text = transcribe_audio_with_whisper(audio_file, model_name="openai/whisper-small", language="ko")
     print("\n[Whisper 텍스트 결과]\n", text)
 
     print("3. Google Cloud NLP로 장소명 추출 중...")

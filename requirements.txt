@@ -1,0 +1,7 @@
+## Requirements for VideoTrip project use pip to install the following packages:
+openai
+google-generativeai
+youtube-transcript-api
+pytube
+folium
+python-dotenv
