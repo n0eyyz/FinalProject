@@ -5,3 +5,12 @@ youtube-transcript-api
 pytube
 folium
 python-dotenv
+fastapi
+uvicorn
+python-dotenv
+selenium
+pydantic
+pydub
+easyocr
+python-multipart
+aiofiles
