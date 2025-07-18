@@ -15,6 +15,7 @@ from pydantic import BaseModel
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv()
 
+
 # --- 1. 설정: 환경 변수에서 API 키와 유튜브 링크를 가져옵니다. ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
