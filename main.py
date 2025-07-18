@@ -241,8 +241,8 @@ def _save_debug_page(driver, filename):
 # insta_url = clean_instagram_url(insta_url) 추가해주세요.
 
 
-@app.post("/extract-locations")
-async def extract_locations(request: Request):
+@app.post("/extract-ylocations")
+async def extract_ylocations(request: Request):
     """
     프론트에서 { "youtube_url": "..." } 형태로 요청을 보내면
     장소명/위도/경도 json을 리턴
