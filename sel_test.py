@@ -23,8 +23,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
 def extract_instagram_text(post_url: str) -> str:
     chrome_options = Options()
     # chrome_options.add_argument("--headless")  # 테스트 시 꺼두기
@@ -108,6 +106,18 @@ async def extract_instagram(data: InstagramUrlRequest):
     
     text = extract_instagram_text(url)
     return JSONResponse({"text": text})
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### 중복제거 이전 코드 ###
