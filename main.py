@@ -32,7 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # API 클라이언트 설정
 openai.api_key = OPENAI_API_KEY
 genai.configure(api_key=GOOGLE_API_KEY)
