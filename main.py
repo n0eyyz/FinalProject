@@ -10,6 +10,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import time
+from pydantic import BaseModel
+from urllib.parse import urlparse
+
 
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv()
@@ -149,6 +160,87 @@ def extract_locations_with_gemini(transcript: str) -> list:
             print(f"받은 응답: {response.text}")
         return []
 
+def extract_instagram_text(post_url: str) -> str:
+    chrome_options = Options()
+    # chrome_options.add_argument("--headless")  # 테스트 시 꺼두기
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--lang=ko_KR")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 ...")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        print(f"[STEP 1] URL 접근: {post_url}")
+        driver.get(post_url)
+        time.sleep(2)
+        
+        # 로그인 팝업 닫기
+        try:
+            close_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[@role='button' and @aria-label='닫기']"))
+            )
+            driver.execute_script("arguments[0].click();", close_btn)
+            print("[STEP 2] 팝업 닫기 성공")
+        except Exception as e:
+            print("[STEP 2] 팝업 닫기 없음/실패", e)
+        
+        # '더 보기' 클릭
+        try:
+            more_btn = WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable((By.XPATH, "//span[text()='더 보기']"))
+            )
+            more_btn.click()
+            print("[STEP 3] '더 보기' 클릭 성공")
+            time.sleep(1)
+        except Exception as e:
+            print("[STEP 3] '더 보기' 버튼 없음/실패", e)
+        
+        # main/h1/div/span에서 추출
+        try:
+            main = driver.find_element(By.TAG_NAME, "main")
+            print("[STEP 4] main 찾음")
+            try:
+                h1 = main.find_element(By.TAG_NAME, "h1")
+                print(f"[STEP 5] h1에서 본문 추출: {h1.text[:100]}")
+                return h1.text.strip()
+            except Exception as e:
+                print("[STEP 5] h1 본문 없음", e)
+        except Exception as e:
+            print("[STEP 4] main 없음", e)
+        
+        # Fallback: meta 태그에서 본문 추출
+        metas = driver.find_elements(By.TAG_NAME, "meta")
+        for m in metas:
+            name = m.get_attribute("name") or m.get_attribute("property")
+            if name in ["og:description", "description"]:
+                content = m.get_attribute("content")
+                if content and len(content) > 10:
+                    print(f"[STEP 6] meta {name}에서 본문 추출: {content[:100]}")
+                    return content.strip()
+        
+        print("[STEP 7] 본문 추출 실패 (main/h1/meta 모두 없음)")
+        return "(본문을 찾을 수 없습니다)"
+    finally:
+        driver.quit()
+
+# 디버깅 전용 (실패 시 로그 저장)
+def _save_debug_page(driver, filename):
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        print(f"🔍 디버깅용 페이지 소스를 {filename}로 저장했습니다.")
+    except Exception:
+        pass
+
+
+# 인스타 링크가 예외적으로 쿼리 파라미터가 붙은 채 전송되는 경우
+# def clean_instagram_url(url):
+#     parsed = urlparse(url)
+#     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+# -> 이후 엔드포인트에서
+# insta_url = clean_instagram_url(insta_url) 추가해주세요.
+
+
 @app.post("/extract-locations")
 async def extract_locations(request: Request):
     """
@@ -173,6 +265,22 @@ async def extract_locations(request: Request):
     # 최종 json 응답
     return JSONResponse(locations)
 
+
+@app.post("/extract-ilocations")
+async def extract_ilocations(request : Request):
+    data = await request.json()
+    insta_url = data.get("insta_url")
+    if not insta_url or "instagram.com/p/" not in insta_url:
+        return JSONResponse(status_code=400, content={"error": "유효한 인스타그램 게시물 URL을 입력해주세요."})
+    
+    text = extract_instagram_text(insta_url)
+    if not text:
+        return JSONResponse({"error": "인스타그램에서 텍스트 추출에 실패했습니다."}, status_code=500)
+    locations = extract_locations_with_gemini(text)
+    if not locations:
+        return JSONResponse({"error": "장소 추출에 실패했습니다."}, status_code=500)
+    
+    return JSONResponse({"insta_url": insta_url, "locations": locations}, status_code=500)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)
