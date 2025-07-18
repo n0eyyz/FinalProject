@@ -225,6 +225,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # OCR 엔진 미리 준비 (한글, 영어 지원)
 reader = easyocr.Reader(['ko', 'en'])
 
