@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from gemini_location import extract_locations_with_gemini
+from nlp.gemini_location import extract_locations_with_gemini
 from crawlers.youtube import get_transcript_from_youtube
 from crawlers.instagram import extract_instagram_text
 from crawlers.screenshot_ocr import capture_and_ocr
