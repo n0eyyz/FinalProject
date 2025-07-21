@@ -12,9 +12,11 @@ def get_transcript_from_youtube(video_url: str) -> str:
     try:
         video_id = video_url.split("v=")[1].split("&")[0]
         print(f"✅ 영상 ID '{video_id}'의 자막 추출을 시도합니다.")
+        print(f"youtube url: {video_url}")
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
         full_transcript = " ".join([item['text'] for item in transcript_list])
         print("✅ 'youtube-transcript-api'를 통해 자막을 성공적으로 가져왔습니다.")
+        print(full_transcript)
         return full_transcript
     except Exception as e:
         print(f"⚠️ 자막을 찾을 수 없습니다 ({e}). 음원 추출 및 STT를 시작합니다.")
