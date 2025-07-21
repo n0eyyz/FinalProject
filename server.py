@@ -62,6 +62,7 @@ def _save_debug_page(driver, filename):
 async def extract_ylocations(request: Request):
     data = await request.json()
     youtube_url = data.get("youtube_url")
+    print(youtube_url)
     script = get_transcript_from_youtube(youtube_url)
     if not script:
         return JSONResponse({"error": "유튜브에서 텍스트 추출 실패"}, status_code=500)
@@ -91,4 +92,4 @@ async def screenshot_ocr():
     return JSONResponse({"ocr_texts": texts})
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    uvicorn.run("server:app", host="0.0.0.0", port=9000, reload=True, reload_dirs=["."])
