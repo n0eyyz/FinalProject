@@ -16,7 +16,6 @@ def get_transcript_from_youtube(video_url: str) -> str:
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
         full_transcript = " ".join([item['text'] for item in transcript_list])
         print("✅ 'youtube-transcript-api'를 통해 자막을 성공적으로 가져왔습니다.")
-        print(full_transcript)
         return full_transcript
     except Exception as e:
         print(f"⚠️ 자막을 찾을 수 없습니다 ({e}). 음원 추출 및 STT를 시작합니다.")
@@ -57,6 +56,7 @@ def get_transcript_from_youtube(video_url: str) -> str:
             
             os.remove(output_filename) # 원본 오디오 파일 삭제
             print("✅ Whisper STT 변환 완료.")
+            print(full_text)
             return full_text
 
         except subprocess.CalledProcessError as e_dlp:

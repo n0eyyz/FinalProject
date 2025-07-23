@@ -8,13 +8,15 @@ from dotenv import load_dotenv
 import uvicorn
 from pydantic import BaseModel
 from urllib.parse import urlparse
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from nlp.gemini_location import extract_locations_with_gemini
 from crawlers.youtube import get_transcript_from_youtube
 from crawlers.instagram import extract_instagram_text
 from crawlers.screenshot_ocr import capture_and_ocr
+from sqlalchemy.orm import Session
+# from database import get_db
 
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv()
@@ -71,25 +73,44 @@ async def extract_ylocations(request: Request):
         return JSONResponse({"error": "장소 추출 실패"}, status_code=500)
     return JSONResponse(locations)
 
-@app.post("/extract-ilocations")
-async def extract_ilocations(request: Request):
-    data = await request.json()
-    insta_url = data.get("insta_url")
-    text = extract_instagram_text(insta_url)
-    if not text:
-        return JSONResponse({"error": "인스타그램에서 텍스트 추출에 실패했습니다."}, status_code=500)
-    locations = extract_locations_with_gemini(text)
-    if not locations:
-        return JSONResponse({"error": "장소 추출에 실패했습니다."}, status_code=500)
-    return JSONResponse({"insta_url": insta_url, "locations": locations})
+@app.get("/extract-location-test")
+async def extract_location_test(request: Request):
+    """
+    집가고싶어요
+    """
+    file_path = "data.json"
+    return FileResponse(path=file_path, media_type='application/json', filename="data.json")
 
-@app.post("/screenshot-ocr")
-async def screenshot_ocr():
-    """
-    현재 PC 화면을 캡처해서 OCR로 텍스트를 추출, JSON으로 반환합니다.
-    """
-    texts = capture_and_ocr()
-    return JSONResponse({"ocr_texts": texts})
+# @app.get("/location-info")
+# def location_info(db: Session = Depends(get_db)):
+#     try:
+#         db.execute("SELECT 1")
+#         return {"status": "connected"}
+#     except Exception as e:
+#         return {"status": "error", "detail": str(e)}
+
+
+
+
+# @app.post("/extract-ilocations/")
+# async def extract_ilocations(request: Request):
+#     data = await request.json()
+#     insta_url = data.get("insta_url")
+#     text = extract_instagram_text(insta_url)
+#     if not text:
+#         return JSONResponse({"error": "인스타그램에서 텍스트 추출에 실패했습니다."}, status_code=500)
+#     locations = extract_locations_with_gemini(text)
+#     if not locations:
+#         return JSONResponse({"error": "장소 추출에 실패했습니다."}, status_code=500)
+#     return JSONResponse({"insta_url": insta_url, "locations": locations})
+
+# @app.post("/screenshot-ocr/")
+# async def screenshot_ocr():
+#     """
+#     현재 PC 화면을 캡처해서 OCR로 텍스트를 추출, JSON으로 반환합니다.
+#     """
+#     texts = capture_and_ocr()
+#     return JSONResponse({"ocr_texts": texts})
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=9000, reload=True, reload_dirs=["."])
