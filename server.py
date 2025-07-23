@@ -74,7 +74,7 @@ async def extract_ylocations(request: Request):
     return JSONResponse(locations)
 
 @app.get("/extract-location-test")
-async def extract_location_test(request: Request):
+async def extract_location_test():
     """
     집가고싶어요
     """
