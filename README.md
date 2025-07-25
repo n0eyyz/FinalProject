@@ -1,0 +1,1 @@
+uvicorn app.main:app --host 0.0.0.0 --port 1636 --reload --ssl-keyfile="C:\finalproject\certs\192.168.18.124+3-key.pem" --ssl-certfile="C:\finalproject\certs\192.168.18.124+3.pem"
