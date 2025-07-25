@@ -10,9 +10,10 @@ venv/
 .venv/
 
 파이썬 캐시
-pycache/
+__pycache__/
 *.pyc
 
 테스트 결과물
 temp_audio.m4a
 temp_chunk_*.m4a
+*.vscode

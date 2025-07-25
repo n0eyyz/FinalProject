@@ -16,8 +16,8 @@ from crawlers.youtube import get_transcript_from_youtube
 from crawlers.instagram import extract_instagram_text
 from crawlers.screenshot_ocr import capture_and_ocr
 from sqlalchemy.orm import Session
-# from database import get_db
-
+from database import get_db
+from sqlalchemy import text
 # .env 파일에서 환경 변수를 로드합니다.
 load_dotenv()
 
@@ -31,11 +31,20 @@ if not OPENAI_API_KEY or not GOOGLE_API_KEY:
 
 # 권한 설정 (개발 중에만 전체 허용)
 app = FastAPI()
+origins = [
+    "http://localhost:5173",
+    "https://www.youtube.com",            # 실제 요청 Origin
+    "chrome-extension://pjpglocmglbhfflohfdajhpeaeogfgdm",   # 크롬 익스텐션이면 이것도
+    "http://localhost:3000",              # 로컬 프론트
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    # allow_origins=["*"],
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -73,22 +82,17 @@ async def extract_ylocations(request: Request):
         return JSONResponse({"error": "장소 추출 실패"}, status_code=500)
     return JSONResponse(locations)
 
-@app.get("/extract-location-test")
-async def extract_location_test():
-    """
-    집가고싶어요
-    """
-    file_path = "data.json"
-    return FileResponse(path=file_path, media_type='application/json', filename="data.json")
+@app.get("/pind-web-map")
+async def pind_web_map():
+    return 0
 
-# @app.get("/location-info")
-# def location_info(db: Session = Depends(get_db)):
-#     try:
-#         db.execute("SELECT 1")
-#         return {"status": "connected"}
-#     except Exception as e:
-#         return {"status": "error", "detail": str(e)}
-
+@app.get("/db-status")
+def db_status(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "connected"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 
@@ -112,5 +116,11 @@ async def extract_location_test():
 #     texts = capture_and_ocr()
 #     return JSONResponse({"ocr_texts": texts})
 
-if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=9000, reload=True, reload_dirs=["."])
+from pathlib import Path
+KEY  = Path("C:/finalproject/certs/192.168.18.124+3-key.pem")
+CERT = Path("C:/finalproject/certs/192.168.18.124+3.pem")
+
+
+# if __name__ == "__main__":
+    # uvicorn.run(app, host="0.0.0.0", port=9000, reload=True, ssl_keyfile=str(KEY),
+    #             ssl_certfile=str(CERT),)
