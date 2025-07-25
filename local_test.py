@@ -15,7 +15,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # --- 기존 코드에서 필요한 함수와 모델들을 가져옵니다 ---
-from models import Base, Users, Contents, Location, UserContentHistory
+from models import Base, Users, Contents, Places, UserContentHistory
 
 # --- .env 파일 로드 및 DB 설정 (local_server.py와 동일) ---
 load_dotenv()
@@ -127,7 +127,7 @@ def run_test():
                     continue
 
                 # Location 모델에 저장
-                location_obj = Location(name=name, lat=lat, lng=lng)
+                location_obj = Places(name=name, lat=lat, lng=lng)
                 locations_to_add.append(location_obj)
                 print(f"    - 새로운 장소 '{name}' 추가 (Location 테이블)")
             
