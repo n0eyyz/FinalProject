@@ -2,8 +2,10 @@
 *.env
 *.json
 finalproject-466106-c573b3aefa34.json/
+
 민감한 정보
 .env
+certs/
 
 파이썬 가상환경
 venv/
