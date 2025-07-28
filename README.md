@@ -23,6 +23,22 @@
 - **ASGI 서버**: Uvicorn
 - **기타**: `python-dotenv`, `fastapi-middleware-cors`
 
+## 주요 코드 파일 설명
+
+이 섹션에서는 서버 실행 및 핵심 기능에 관련된 주요 코드 파일들의 역할을 설명합니다.
+
+- `app/main.py`: FastAPI 애플리케이션의 메인 진입점입니다. FastAPI 앱 인스턴스를 생성하고, CORS 미들웨어를 설정하며, `app/routers` 디렉토리에 정의된 API 라우터들을 포함합니다. 데이터베이스 연결 및 테이블 생성 로직도 이곳에서 초기화됩니다.
+- `app/db/database.py`: 데이터베이스 연결을 설정하고 SQLAlchemy 세션을 생성하는 역할을 합니다. `get_db` 함수를 통해 FastAPI의 의존성 주입 시스템에 데이터베이스 세션을 제공합니다.
+- `app/models.py`: SQLAlchemy ORM(Object-Relational Mapping) 모델을 정의합니다. 데이터베이스의 각 테이블(예: `Users`, `Contents`, `Places` 등)에 해당하는 Python 클래스가 이곳에 정의되어 있습니다.
+- `app/routers/youtube.py`: YouTube 비디오 URL 처리와 관련된 API 엔드포인트를 정의합니다. 비디오 ID 추출, 위치 정보 추출 및 저장, 사용자 콘텐츠 기록 등의 로직을 담당합니다.
+- `app/routers/auth.py`: 사용자 인증(회원가입, 로그인)과 관련된 API 엔드포인트를 정의합니다. 사용자 정보를 데이터베이스에 저장하고, JWT 토큰을 발행하여 인증을 처리합니다.
+- `app/repositories/`: 데이터베이스와의 상호작용(CRUD 작업)을 담당하는 모듈들을 포함합니다. 예를 들어, `app/repositories/users.py`는 사용자 데이터에 대한 작업을, `app/repositories/locations.py`는 위치 데이터에 대한 작업을 처리합니다.
+- `app/schemas/`: Pydantic 모델을 정의하여 API 요청 및 응답 데이터의 유효성을 검사하고 직렬화/역직렬화를 수행합니다. 예를 들어, `app/schemas/auth.py`는 사용자 인증 관련 데이터 모델을 정의합니다.
+- `app/utils/`: 다양한 유틸리티 함수들을 포함합니다. `hash.py`는 비밀번호 해싱을, `token.py`는 JWT 토큰 생성 및 검증을, `url.py`는 URL 처리 관련 함수를 제공합니다.
+- `app/dependencies.py`: FastAPI의 의존성 주입 시스템에서 사용되는 함수들을 정의합니다. 예를 들어, `get_current_user` 함수는 요청 헤더에서 JWT 토큰을 추출하고 검증하여 현재 인증된 사용자 객체를 반환합니다.
+- `alembic.ini`: Alembic 데이터베이스 마이그레이션 도구의 설정 파일입니다. 데이터베이스 연결 정보, 마이그레이션 스크립트의 위치 등을 정의합니다.
+- `migrations/`: Alembic이 생성하는 데이터베이스 마이그레이션 스크립트들이 저장되는 디렉토리입니다. 데이터베이스 스키마 변경 이력을 관리합니다.
+
 ## 프로젝트 구조
 
 ```
