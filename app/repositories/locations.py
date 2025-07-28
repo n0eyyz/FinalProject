@@ -44,7 +44,7 @@ def link_content_place(db: Session, content_id: str, place_id: int):
         db.add(ContentPlaces(content_id=content_id, place_id=place_id))
         db.commit()
 
-def add_user_history(db: Session, user_id: str | None, content_id: str):
+def create_user_content_history(db: Session, user_id: int, content_id: str):
     if not user_id:
         return
     hist = UserContentHistory(user_id=user_id, content_id=content_id)

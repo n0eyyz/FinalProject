@@ -6,7 +6,9 @@ Base = declarative_base()
 
 class Users(Base):
     __tablename__ = "users"
-    user_id   = Column(String(36), primary_key=True)
+    user_id   = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
 
 class Contents(Base):
@@ -42,7 +44,7 @@ class ContentPlaces(Base):
 class UserContentHistory(Base):
     __tablename__ = "user_content_history"
     id           = Column(Integer, primary_key=True, autoincrement=True)
-    user_id      = Column(String(36), ForeignKey("users.user_id"))
+    user_id      = Column(Integer, ForeignKey("users.user_id"))
     content_id   = Column(String(255), ForeignKey("contents.content_id"))
     created_at   = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
     __table_args__ = (

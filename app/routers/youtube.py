@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.youtube import URLRequest, PlaceResponse, Place
 from app.repositories import locations as loc_repo
+from app.repositories import users as user_repo
 from app.utils import url as url_util
+from app.utils import token as token_util
+from app.dependencies import get_current_user # get_current_user 임포트
+import models # models 임포트
 from typing import List
 import json
 from urllib.parse import quote
@@ -22,42 +26,51 @@ router = APIRouter(
 @router.post("/process", response_model=PlaceResponse)
 def process_youtube_url(
     request: URLRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.Users = Depends(get_current_user) # get_current_user 의존성 주입
 ):
     logger.info("="*50)
     logger.info("API /process 호출됨. 요청 URL: %s", request.url)
     try:
-        # 1. URL에서 비디오 ID 추출
-        logger.info("[1/5] URL에서 비디오 ID 추출 시작...")
+        # 1. 토큰 검증 (get_current_user에서 이미 처리됨)
+        user = current_user # current_user 객체를 바로 사용
+        logger.info("...토큰 검증 성공. 사용자: %s", user.email)
+
+        # 2. URL에서 비디오 ID 추출
+        logger.info("[2/6] URL에서 비디오 ID 추출 시작...")
         video_id = url_util.extract_video_id(request.url)
         if not video_id:
             logger.error("...비디오 ID 추출 실패. 잘못된 URL.")
             raise HTTPException(status_code=400, detail="Invalid YouTube URL")
         logger.info("...비디오 ID 추출 성공: %s", video_id)
 
-        # 2. (Mode 1) DB에서 기존 정보 확인
-        logger.info("[2/5] DB에서 기존 장소 정보 확인 시작...")
+        # 3. (Mode 1) DB에서 기존 정보 확인
+        logger.info("[3/6] DB에서 기존 장소 정보 확인 시작...")
         existing_places = loc_repo.get_places_by_content_id(db, video_id)
         logger.info("...DB 확인 완료. %d개의 장소 발견.", len(existing_places) if existing_places else 0)
         
         if existing_places:
             places_dto = [Place.from_orm(p) for p in existing_places]
             logger.info("...기존 정보가 있어 'db' 모드로 응답합니다.")
+            loc_repo.create_user_content_history(db, user.user_id, video_id)
+            logger.info("...사용자 히스토리 저장 완료.")
             logger.info("="*50)
             return PlaceResponse(mode="db", places=places_dto)
 
-        # 3. (Mode 2) DB에 정보가 없으면 새로 추출 및 저장
-        logger.info("[3/5] DB에 정보 없음. 새로운 장소 추출 및 저장 시작...")
+        # 4. (Mode 2) DB에 정보가 없으면 새로 추출 및 저장
+        logger.info("[4/6] DB에 정보 없음. 새로운 장소 추출 및 저장 시작...")
         new_places = loc_repo.extract_and_save_locations(db, video_id, request.url)
         logger.info("...새로운 장소 추출 및 저장 완료. %d개의 장소 발견.", len(new_places) if new_places else 0)
 
         if not new_places:
-            logger.info("[4/5] 새로 추출된 장소가 없어 'new' 모드(빈 배열)로 응답합니다.")
+            logger.info("[5/6] 새로 추출된 장소가 없어 'new' 모드(빈 배열)로 응답합니다.")
             logger.info("="*50)
             return PlaceResponse(mode="new", places=[])
         
-        logger.info("[5/5] 최종 응답 준비...")
+        logger.info("[6/6] 최종 응답 준비...")
         places_dto = [Place.from_orm(p) for p in new_places]
+        loc_repo.create_user_content_history(db, user.user_id, video_id)
+        logger.info("...사용자 히스토리 저장 완료.")
         logger.info("...'new' 모드로 응답합니다.")
         logger.info("="*50)
         return PlaceResponse(mode="new", places=places_dto)
