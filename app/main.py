@@ -1,19 +1,9 @@
-import uvicorn
+# import uvicorn
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- 추가된 부분 ---
-from app.db.database import engine
-from models import Base
-# --------------------
-
 from app.routers import youtube, auth
 from app.dependencies import get_current_user # get_current_user 임포트
-
-# --- 추가된 부분 ---
-# 데이터베이스에 테이블 생성
-# Base.metadata.create_all(bind=engine)
-# --------------------
 
 app = FastAPI(title="Location Extractor API")
 
