@@ -10,18 +10,19 @@ def get_content_by_id(db: Session, content_id: str) -> Contents | None:
     """
     return db.query(Contents).filter(Contents.content_id == content_id).first()
 
-def create_or_update_content(db: Session, content_id: str, content_type: str, transcript: str | None):
+def create_or_update_content(db: Session, content_id: str, content_type: str):
     """
     주어진 content_id에 해당하는 콘텐츠를 생성하거나 업데이트합니다.
-    콘텐츠가 이미 존재하면 스크립트를 업데이트하고, 없으면 새로 생성합니다.
+    콘텐츠가 이미 존재하면 업데이트하고, 없으면 새로 생성합니다.
+    (스크립트는 저장하지 않습니다.)
     """
     content = get_content_by_id(db, content_id)
     if content:
-        content.transcript = transcript
+        # 스크립트는 더 이상 업데이트하지 않습니다.
         db.commit()
         db.refresh(content)
         return content
-    content = Contents(content_id=content_id, content_type=content_type, transcript=transcript)
+    content = Contents(content_id=content_id, content_type=content_type, transcript=None) # transcript를 None으로 설정
     db.add(content)
     db.commit()
     db.refresh(content)
@@ -94,7 +95,7 @@ def extract_and_save_locations(db: Session, video_id: str, url: str) -> list[Pla
         return []
 
     # 2. 콘텐츠 정보 저장 (또는 업데이트)
-    create_or_update_content(db, video_id, 'youtube', transcript)
+    create_or_update_content(db, video_id, 'youtube')
 
     # 3. 추출된 장소들을 DB에 저장하고 콘텐츠와 연결
     saved_places = []

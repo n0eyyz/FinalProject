@@ -15,6 +15,7 @@ load_dotenv(ENV_PATH)
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL (또는 DB_URL) 이 설정되지 않았습니다.")
+print(f"[DB_DEBUG] Connecting to database: {DATABASE_URL}") # 이 줄을 추가하세요.
 
 # 3) 엔진 생성: DB 종류별 옵션 처리
 url_obj = make_url(DATABASE_URL)

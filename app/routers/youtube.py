@@ -101,6 +101,23 @@ def get_user_content_history(
     logger.info("사용자 %s의 콘텐츠 기록 조회 완료: %s", current_user.email, content_ids)
     return content_ids
 
+@router.get("/places/{video_id}", response_model=List[Place])
+def get_places_for_video(
+    video_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.Users = Depends(get_current_user)
+):
+    """
+    특정 video_id에 해당하는 장소 목록을 조회합니다.
+    """
+    logger.info("API /places/%s 호출됨. 사용자: %s", video_id, current_user.email)
+    places = loc_repo.get_places_by_content_id(db, video_id)
+    if not places:
+        logger.warning("video_id %s에 대한 장소 정보가 없습니다.", video_id)
+        raise HTTPException(status_code=404, detail="해당 영상에 대한 장소 정보가 없습니다.")
+    logger.info("video_id %s에 대한 장소 %d개 조회 완료.", video_id, len(places))
+    return [Place.from_orm(p) for p in places]
+
 @router.get("/view/{video_id}", status_code=302)
 def view_locations_on_map(video_id: str, db: Session = Depends(get_db)):
     """
