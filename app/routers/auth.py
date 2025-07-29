@@ -15,6 +15,10 @@ router = APIRouter(
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
+    """
+    새로운 사용자를 등록합니다. 이메일이 이미 등록되어 있으면 400 Bad Request를 반환합니다.
+    비밀번호는 해싱되어 저장됩니다.
+    """
     db_user = user_repository.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(
@@ -30,6 +34,9 @@ def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)): # 이 부분을 수정합니다.
+    """
+    사용자 로그인을 처리하고, 유효한 자격 증명인 경우 액세스 토큰을 반환합니다.
+    """
     db_user = user_repository.get_user_by_email(db, email=form_data.username) # form_data.username 사용
     if not db_user or not hash_utils.verify_password(form_data.password, db_user.hashed_password): # form_data.password 사용
         raise HTTPException(

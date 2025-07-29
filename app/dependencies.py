@@ -12,6 +12,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # 의존성 주입 함수: 토큰을 검증하고 사용자 객체를 반환
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> Users:
+    """
+    현재 요청을 보낸 사용자의 인증 토큰을 검증하고, 해당 사용자 객체를 반환합니다.
+    유효하지 않은 토큰이거나 사용자를 찾을 수 없는 경우 HTTPException을 발생시킵니다.
+    FastAPI 라우터에서 Depends를 통해 의존성 주입에 사용됩니다.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

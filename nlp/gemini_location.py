@@ -4,7 +4,14 @@ import os
 
 def extract_locations_with_gemini(transcript: str) -> list:
     """
-    Gemini API를 사용하여 텍스트에서 장소 이름과 좌표를 추출합니다.
+    Google Gemini API를 사용하여 주어진 텍스트(YouTube 스크립트)에서 장소 이름과 좌표를 추출합니다.
+    
+    Args:
+        transcript (str): 장소 정보를 추출할 텍스트 스크립트.
+
+    Returns:
+        list: 추출된 장소 정보(이름, 위도, 경도)를 담은 딕셔너리 리스트. 
+              장소 추출에 실패하거나 텍스트가 없으면 빈 리스트를 반환합니다.
     """
     if not transcript:
         print("⚠️ 처리할 텍스트가 없어 장소 추출을 건너뜁니다.")

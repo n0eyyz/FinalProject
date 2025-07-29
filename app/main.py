@@ -17,6 +17,8 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Location Extractor API")
 
+# CORS 미들웨어 설정: 모든 Origin, 자격 증명, 메서드, 헤더를 허용합니다.
+# 이는 개발 및 테스트 목적으로 사용되며, 실제 배포 시에는 보안 강화를 위해 특정 Origin만 허용하도록 변경해야 합니다.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],     # 테스트용
@@ -26,6 +28,8 @@ app.add_middleware(
 )
 
 # 라우터 포함 시 의존성 추가
+# youtube 라우터는 get_current_user 의존성을 통해 인증이 필요하도록 설정합니다.
+# auth 라우터는 인증 없이 접근 가능합니다.
 app.include_router(youtube.router, dependencies=[Depends(get_current_user)])
 app.include_router(auth.router)
 

@@ -29,6 +29,11 @@ def process_youtube_url(
     db: Session = Depends(get_db),
     current_user: models.Users = Depends(get_current_user) # get_current_user 의존성 주입
 ):
+    """
+    YouTube URL을 받아 비디오에서 장소 정보를 추출하고 저장합니다.
+    이미 데이터베이스에 정보가 있으면 기존 정보를 반환하고, 없으면 새로 추출하여 저장합니다.
+    사용자의 콘텐츠 조회 기록을 남깁니다.
+    """
     logger.info("="*50)
     logger.info("API /process 호출됨. 요청 URL: %s", request.url)
     try:
@@ -83,10 +88,24 @@ def process_youtube_url(
         raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {str(e)}")
 
 
+@router.get("/history", response_model=List[str])
+def get_user_content_history(
+    db: Session = Depends(get_db),
+    current_user: models.Users = Depends(get_current_user)
+):
+    """
+    현재 로그인한 사용자의 콘텐츠 기록(content_id 목록)을 조회합니다.
+    """
+    logger.info("API /history 호출됨. 사용자: %s", current_user.email)
+    content_ids = loc_repo.get_content_ids_by_user_id(db, current_user.user_id)
+    logger.info("사용자 %s의 콘텐츠 기록 조회 완료: %s", current_user.email, content_ids)
+    return content_ids
+
 @router.get("/view/{video_id}", status_code=302)
 def view_locations_on_map(video_id: str, db: Session = Depends(get_db)):
     """
-    video_id에 해당하는 장소들을 pind_web_map에서 보여주도록 리다이렉트합니다.
+    주어진 video_id에 해당하는 장소 정보를 조회하고,
+    해당 정보를 포함하는 URL로 pind_web_map 애플리케이션으로 리다이렉트합니다.
     """
     logger.info("="*50)
     logger.info("API /view/%s 호출됨", video_id)

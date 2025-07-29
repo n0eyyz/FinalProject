@@ -31,6 +31,10 @@ from models import Base
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
 
 def get_db():
+    """
+    데이터베이스 세션을 생성하고 반환합니다. 요청 처리 후 세션을 닫습니다.
+    FastAPI의 Depends를 통해 의존성 주입에 사용됩니다.
+    """
     db = SessionLocal()
     try:
         yield db

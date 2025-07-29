@@ -5,9 +5,16 @@ from app.services.extractor import extract_locations_from_youtube
 from typing import List
 
 def get_content_by_id(db: Session, content_id: str) -> Contents | None:
+    """
+    주어진 content_id에 해당하는 Contents 객체를 데이터베이스에서 조회합니다.
+    """
     return db.query(Contents).filter(Contents.content_id == content_id).first()
 
 def create_or_update_content(db: Session, content_id: str, content_type: str, transcript: str | None):
+    """
+    주어진 content_id에 해당하는 콘텐츠를 생성하거나 업데이트합니다.
+    콘텐츠가 이미 존재하면 스크립트를 업데이트하고, 없으면 새로 생성합니다.
+    """
     content = get_content_by_id(db, content_id)
     if content:
         content.transcript = transcript
@@ -21,6 +28,10 @@ def create_or_update_content(db: Session, content_id: str, content_type: str, tr
     return content
 
 def upsert_place(db: Session, name: str, lat: float | None, lng: float | None) -> Places:
+    """
+    주어진 이름의 장소를 데이터베이스에서 찾아 반환하거나, 없으면 새로 생성합니다.
+    장소가 이미 존재하지만 위도/경도 정보가 없는 경우, 제공된 위도/경도 정보로 업데이트합니다.
+    """
     place = db.query(Places).filter(Places.name == name).first()
     if place:
         if (place.lat is None or place.lng is None) and (lat is not None and lng is not None):
@@ -35,6 +46,10 @@ def upsert_place(db: Session, name: str, lat: float | None, lng: float | None) -
     return place
 
 def link_content_place(db: Session, content_id: str, place_id: int):
+    """
+    콘텐츠와 장소를 연결하는 ContentPlaces 레코드를 생성합니다.
+    이미 연결되어 있다면 아무것도 하지 않습니다.
+    """
     exists = (
         db.query(ContentPlaces)
         .filter(ContentPlaces.content_id == content_id, ContentPlaces.place_id == place_id)
@@ -45,6 +60,9 @@ def link_content_place(db: Session, content_id: str, place_id: int):
         db.commit()
 
 def create_user_content_history(db: Session, user_id: int, content_id: str):
+    """
+    사용자의 콘텐츠 조회 기록을 생성합니다. user_id와 content_id의 조합이 이미 존재하면 무시합니다.
+    """
     if not user_id:
         return
     hist = UserContentHistory(user_id=user_id, content_id=content_id)
@@ -89,3 +107,14 @@ def extract_and_save_locations(db: Session, video_id: str, url: str) -> list[Pla
     
     # 4. 최종 저장된 장소 목록 반환
     return saved_places
+
+def get_content_ids_by_user_id(db: Session, user_id: int) -> list[str]:
+    """
+    주어진 user_id에 해당하는 사용자가 요청했던 모든 content_id 목록을 조회합니다.
+    """
+    return [
+        history.content_id
+        for history in db.query(UserContentHistory)
+        .filter(UserContentHistory.user_id == user_id)
+        .all()
+    ]
