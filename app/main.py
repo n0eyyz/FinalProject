@@ -12,7 +12,7 @@ from app.dependencies import get_current_user # get_current_user 임포트
 
 # --- 추가된 부분 ---
 # 데이터베이스에 테이블 생성
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 # --------------------
 
 app = FastAPI(title="Location Extractor API")
