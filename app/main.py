@@ -20,7 +20,7 @@ app.add_middleware(
 # 라우터 포함 시 의존성 추가
 # youtube 라우터는 get_current_user 의존성을 통해 인증이 필요하도록 설정합니다.
 # auth 라우터는 인증 없이 접근 가능합니다.
-app.include_router(youtube.router, dependencies=[Depends(get_current_user)])
+app.include_router(youtube.router)
 app.include_router(auth.router)
 
 # if __name__ == "__main__":
