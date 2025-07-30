@@ -33,3 +33,16 @@ class User(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PasswordResetRequest(BaseModel):
+    """
+    비밀번호 재설정 요청을 위한 스키마.
+    """
+    email: EmailStr
+
+class PasswordReset(BaseModel):
+    """
+    비밀번호 재설정을 위한 스키마.
+    """
+    token: str
+    new_password: str

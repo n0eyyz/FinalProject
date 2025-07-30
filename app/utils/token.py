@@ -2,10 +2,12 @@
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from app.schemas.auth import TokenData
+from fastapi import HTTPException, status
 
 SECRET_KEY = "your-secret-key"  # This should be loaded from environment variables
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 15
 
 def create_access_token(data: dict):
     """
@@ -32,3 +34,28 @@ def verify_token(token: str, credentials_exception):
     except JWTError:
         raise credentials_exception
     return token_data
+
+def create_password_reset_token(email: str) -> str:
+    """
+    비밀번호 재설정을 위한 짧은 만료 기간의 토큰을 생성합니다.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"exp": expire, "sub": email, "scope": "password-reset"}
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_password_reset_token(token: str) -> str:
+    """
+    비밀번호 재설정 토큰을 검증하고 이메일을 반환합니다.
+    유효하지 않으면 HTTPException을 발생시킵니다.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("scope") != "password-reset":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token scope")
+        email = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        return email
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate token")

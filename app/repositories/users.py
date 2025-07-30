@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 import models
-from sqlalchemy.orm import Session
 
 def get_user_by_email(db: Session, email: str):
     """
@@ -13,6 +12,15 @@ def create_user(db: Session, user: models.Users):
     새로운 사용자(Users) 객체를 데이터베이스에 추가합니다.
     """
     db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+def update_user_password(db: Session, user: models.Users, hashed_password: str):
+    """
+    사용자의 비밀번호를 업데이트합니다.
+    """
+    user.hashed_password = hashed_password
     db.commit()
     db.refresh(user)
     return user
