@@ -40,19 +40,23 @@ class Places(Base):
     """
     추출된 장소 정보를 저장하는 데이터베이스 모델입니다.
     - place_id: 장소 고유 ID (기본 키)
-    - name: 장소 이름 (고유)
+    - name: 장소 이름
     - lat: 장소의 위도
     - lng: 장소의 경도
     - contents: 이 장소와 연결된 콘텐츠들 (ContentPlaces를 통한 관계)
+    - __table_args__: 이름, 위도, 경도의 조합은 고유해야 합니다.
     """
     __tablename__ = 'places'
     place_id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
+    name = Column(String, nullable=False)
     lat = Column(Float)
     lng = Column(Float)
 
     # Relationship to Contents
     contents = relationship("Contents", secondary="content_places", back_populates="places")
+
+    # 복합 고유 제약 (Composite Unique Constraint)
+    __table_args__ = (UniqueConstraint('name', 'lat', 'lng', name='_name_lat_lng_uc'),)
 
     def __repr__(self):
         return f"<Places(place_id={self.place_id}, name='{self.name}')>"

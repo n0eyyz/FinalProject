@@ -30,21 +30,26 @@ def create_or_update_content(db: Session, content_id: str, content_type: str):
 
 def upsert_place(db: Session, name: str, lat: float | None, lng: float | None) -> Places:
     """
-    주어진 이름의 장소를 데이터베이스에서 찾아 반환하거나, 없으면 새로 생성합니다.
-    장소가 이미 존재하지만 위도/경도 정보가 없는 경우, 제공된 위도/경도 정보로 업데이트합니다.
+    주어진 이름, 위도, 경도에 해당하는 장소를 데이터베이스에서 찾아 반환하거나, 없으면 새로 생성합니다.
     """
-    place = db.query(Places).filter(Places.name == name).first()
+    # 이름, 위도, 경도를 모두 사용하여 장소를 조회
+    place = db.query(Places).filter_by(name=name, lat=lat, lng=lng).first()
+    
     if place:
-        if (place.lat is None or place.lng is None) and (lat is not None and lng is not None):
-            place.lat, place.lng = lat, lng
-            db.commit()
-            db.refresh(place)
-        return place
-    place = Places(name=name, lat=lat, lng=lng)
-    db.add(place)
-    db.commit()
-    db.refresh(place)
-    return place
+        return place  # 장소가 존재하면 즉시 반환
+    
+    # 장소가 없으면 새로 생성
+    new_place = Places(name=name, lat=lat, lng=lng)
+    db.add(new_place)
+    try:
+        db.commit()
+        db.refresh(new_place)
+        return new_place
+    except IntegrityError:
+        # 동시성 문제 등으로 인해 다른 요청이 먼저 장소를 생성한 경우
+        db.rollback()
+        # 다시 조회하여 반환
+        return db.query(Places).filter_by(name=name, lat=lat, lng=lng).first()
 
 def link_content_place(db: Session, content_id: str, place_id: int):
     """
