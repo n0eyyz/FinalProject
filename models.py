@@ -4,6 +4,7 @@ import datetime
 
 Base = declarative_base()
 
+
 class Users(Base):
     """
     사용자 정보를 저장하는 데이터베이스 모델입니다.
@@ -12,11 +13,13 @@ class Users(Base):
     - hashed_password: 해시된 비밀번호
     - created_at: 사용자 생성 시간
     """
+
     __tablename__ = "users"
-    user_id   = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
+
 
 class Contents(Base):
     """
@@ -26,15 +29,29 @@ class Contents(Base):
     - transcript: 콘텐츠의 텍스트 스크립트
     - processed_at: 콘텐츠 처리 시간
     - places: 이 콘텐츠와 연결된 장소들 (ContentPlaces를 통한 관계)
+    - title: 콘텐츠 제목
+    - thumbnail_url: 콘텐츠 썸네일 URL
+    - youtube_url: YouTube URL (콘텐츠 유형이 'youtube'인 경우 필수로 적용 되어야함 고려 필요 (추후))
     """
+
     __tablename__ = "contents"
-    content_id   = Column(String(255), primary_key=True)
+    content_id = Column(String(255), primary_key=True)
     content_type = Column(String(50), nullable=False)
-    transcript   = Column(Text)
-    processed_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC), onupdate=datetime.datetime.now(datetime.UTC))
+    transcript = Column(Text)
+    processed_at = Column(
+        DateTime,
+        default=datetime.datetime.now(datetime.UTC),
+        onupdate=datetime.datetime.now(datetime.UTC),
+    )
+    title = Column(String, nullable=True)
+    thumbnail_url = Column(String, nullable=True)
+    youtube_url = Column(String, nullable=True)
 
     # Relationship to Places
-    places = relationship("Places", secondary="content_places", back_populates="contents")
+    places = relationship(
+        "Places", secondary="content_places", back_populates="contents"
+    )
+
 
 class Places(Base):
     """
@@ -46,20 +63,24 @@ class Places(Base):
     - contents: 이 장소와 연결된 콘텐츠들 (ContentPlaces를 통한 관계)
     - __table_args__: 이름, 위도, 경도의 조합은 고유해야 합니다.
     """
-    __tablename__ = 'places'
+
+    __tablename__ = "places"
     place_id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     lat = Column(Float)
     lng = Column(Float)
 
     # Relationship to Contents
-    contents = relationship("Contents", secondary="content_places", back_populates="places")
+    contents = relationship(
+        "Contents", secondary="content_places", back_populates="places"
+    )
 
     # 복합 고유 제약 (Composite Unique Constraint)
-    __table_args__ = (UniqueConstraint('name', 'lat', 'lng', name='_name_lat_lng_uc'),)
+    __table_args__ = (UniqueConstraint("name", "lat", "lng", name="_name_lat_lng_uc"),)
 
     def __repr__(self):
         return f"<Places(place_id={self.place_id}, name='{self.name}')>"
+
 
 class ContentPlaces(Base):
     """
@@ -69,11 +90,13 @@ class ContentPlaces(Base):
     - place_id: Places 테이블의 place_id를 참조하는 외래 키
     - UniqueConstraint: content_id와 place_id의 조합은 고유해야 합니다.
     """
+
     __tablename__ = "content_places"
-    id           = Column(Integer, primary_key=True, autoincrement=True)
-    content_id   = Column(String(255), ForeignKey("contents.content_id"))
-    place_id     = Column(Integer, ForeignKey("places.place_id"))
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content_id = Column(String(255), ForeignKey("contents.content_id"))
+    place_id = Column(Integer, ForeignKey("places.place_id"))
     __table_args__ = (UniqueConstraint("content_id", "place_id"),)
+
 
 class UserContentHistory(Base):
     """
@@ -84,16 +107,14 @@ class UserContentHistory(Base):
     - created_at: 기록 생성 시간
     - UniqueConstraint: user_id와 content_id의 조합은 고유해야 합니다.
     """
+
     __tablename__ = "user_content_history"
-    id           = Column(Integer, primary_key=True, autoincrement=True)
-    user_id      = Column(Integer, ForeignKey("users.user_id"))
-    content_id   = Column(String(255), ForeignKey("contents.content_id"))
-    created_at   = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
-    __table_args__ = (
-        UniqueConstraint("user_id", "content_id"),
-    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"))
+    content_id = Column(String(255), ForeignKey("contents.content_id"))
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
+    __table_args__ = (UniqueConstraint("user_id", "content_id"),)
 
-
-
-
-
+    # <<< 추가: 쿼리 최적화를 위해 relationship을 추가합니다.
+    content = relationship("Contents")
+    user = relationship("Users")
