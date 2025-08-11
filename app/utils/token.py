@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from app.schemas.auth import TokenData
