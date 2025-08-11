@@ -20,11 +20,19 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(token: str, credentials_exception):
+def verify_token(token: str, credentials_exception=None):
     """
     주어진 JWT 토큰을 검증하고, 토큰에서 추출한 데이터를 TokenData 객체로 반환합니다.
     토큰이 유효하지 않거나 디코딩에 실패하면 credentials_exception을 발생시킵니다.
+    credentials_exception이 None이면 기본 예외를 생성합니다.
     """
+    if credentials_exception is None:
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
