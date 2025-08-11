@@ -20,59 +20,37 @@ router = APIRouter(
     tags=["youtube"],
 )
 
-@router.post("/process", response_model=PlaceResponse)
+from app.schemas.jobs import JobCreationResponse
+from app.tasks import process_video_placeholder
+
+@router.post("/process", response_model=JobCreationResponse, status_code=status.HTTP_202_ACCEPTED)
 async def process_youtube_url(
     request: URLRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[models.Users] = Depends(get_current_user), # Optional user
 ):
     """
-    YouTube URL을 비동기적으로 처리합니다.
-    - DB에 장소 정보가 있으면 즉시 반환합니다.
-    - 정보가 없으면, 백그라운드에서 장소 추출 작업을 시작하고 즉시 응답을 반환합니다.
-    - 로그인된 사용자의 경우 히스토리를 기록합니다.
+    YouTube URL 처리를 위한 작업을 Celery 큐에 등록하고 즉시 job_id를 반환합니다.
     """
     user_id = current_user.user_id if current_user else None
     requester = f"user_id {user_id}" if user_id else "guest"
-    logger.info(f"URL 처리 시작: {request.url} (요청자: {requester})")
+    logger.info(f"URL 처리 요청 접수: {request.url} (요청자: {requester})")
 
-    try:
-        video_id = url_util.extract_video_id(request.url)
-        if not video_id:
-            raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    video_id = url_util.extract_video_id(request.url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
-        # 1. DB에서 비동기적으로 기존 정보 확인
-        existing_places = await loc_repo.get_places_by_content_id(db, video_id)
-        if existing_places:
-            logger.info(f"...기존 장소 정보 {len(existing_places)}개 발견. 'db' 모드로 응답합니다.")
-            if user_id:
-                await loc_repo.create_user_content_history(db, user_id, video_id)
-            return PlaceResponse(
-                mode="db", places=[Place.from_orm(p) for p in existing_places]
-            )
+    # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
+    task = process_video_placeholder.apply_async(args=[request.url])
 
-        # 2. DB에 정보가 없으면 백그라운드 작업으로 전환
-        logger.info("...기존 정보 없음. 백그라운드에서 장소 추출 및 저장 시작...")
-        
-        # 새로운 세션을 생성하는 백그라운드 함수를 호출합니다.
-        background_tasks.add_task(loc_repo.extract_and_save_locations, video_id, request.url)
-        
-        if user_id:
-            # 히스토리는 즉시 저장 (어떤 영상을 보려고 했는지 기록)
-            await loc_repo.create_user_content_history(db, user_id, video_id)
+    # 사용자 히스토리는 즉시 저장
+    if user_id:
+        await loc_repo.create_user_content_history(db, user_id, video_id)
 
-        # 사용자에게는 장소가 없다는 응답을 즉시 보냄
-        return PlaceResponse(mode="new_processing", places=[])
+    logger.info(f"작업이 성공적으로 큐에 등록되었습니다. Job ID: {task.id}")
 
-    except HTTPException as e:
-        logger.error(f"HTTP 예외 발생: {e.detail}")
-        raise e
-    except Exception as e:
-        logger.exception("[CRITICAL] 처리되지 않은 심각한 예외 발생!")
-        raise HTTPException(
-            status_code=500, detail=f"An unexpected server error occurred: {str(e)}"
-        )
+    # 클라이언트에게는 job_id를 포함한 응답을 즉시 보냅니다.
+    return JobCreationResponse(job_id=task.id)
 
 @router.get("/history", response_model=List[ApiVideoHistory])
 async def get_user_content_history(
