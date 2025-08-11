@@ -8,6 +8,8 @@ from app.schemas import auth as auth_schema
 from app.utils import hash as hash_utils
 from app.utils import token as token_utils
 from app.utils.email import send_email
+import aiohttp
+import asyncio
 
 router = APIRouter(
     prefix="/auth",
@@ -17,10 +19,61 @@ router = APIRouter(
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
     """
-    새로운 사용자를 등록합니다. 이메일이 이미 등록되어 있으면 400 Bad Request를 반환합니다.
+    새로운 사용자를 등록합니다. 외부 API로 이메일을 검증하고, 이메일이 이미 등록되어 있으면 400 Bad Request를 반환합니다.
     비밀번호는 해싱되어 저장됩니다.
+    (타임아웃 및 재시도 로직 추가)
     """
-    db_user = await user_repository.get_user_by_email(db, email=user.email)
+    # --- aiohttp 호출 (타임아웃 및 재시도 로직 포함) ---
+    validation_url = f"https://api.example.com/validate?email={user.email}" # 가상의 API URL
+
+    # 1. 타임아웃 설정: 전체 요청 시간을 5초로 제한
+    timeout = aiohttp.ClientTimeout(total=5.0)
+
+    # 2. 재시도 로직 설정: 최대 3번 시도
+    MAX_RETRIES = 3
+    last_exception = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(validation_url) as response:
+                    # 성공적인 응답 (2xx)이면 루프를 빠져나감
+                    if 200 <= response.status < 300:
+                        # print(f"Attempt {attempt + 1} successful.")
+                        last_exception = None # 성공 시 에러 기록 초기화
+                        break
+
+                    # 클라이언트 측 에러(4xx)는 재시도할 필요가 없으므로 바로 실패 처리
+                    if 400 <= response.status < 500:
+                        raise HTTPException(
+                            status_code=response.status,
+                            detail="Client error from external validation service."
+                        )
+
+                    # 서버 측 에러(5xx)나 기타 예외적인 상황은 재시도
+                    response.raise_for_status() # 4xx, 5xx 에러 발생 시 aiohttp.ClientResponseError 예외 발생
+
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            # aiohttp.ClientError: 네트워크 연결 관련 에러 (DNS, connection refused 등)
+            # asyncio.TimeoutError: 위에서 설정한 5초 타임아웃 발생
+            # print(f"Attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+            last_exception = e
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(1)  # 1초 대기 후 다음 시도
+        else: # try 블록에서 예외가 발생하지 않았을 때 실행
+            if 200 <= response.status < 300:
+                 break # 성공했으므로 루프 탈출
+
+    # 모든 재시도가 실패했을 경우
+    if last_exception is not None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"External service is unavailable after {MAX_RETRIES} attempts."
+        )
+    # -----------------------------------------------------
+
+    # 기존의 동기 DB 코드를 asyncio.to_thread로 감싸 비동기적으로 실행
+    db_user = await asyncio.to_thread(user_repository.get_user_by_email, db, user.email)
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -29,7 +82,7 @@ async def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
     
     hashed_password = hash_utils.get_password_hash(user.password)
     db_user = models.Users(email=user.email, hashed_password=hashed_password)
-    await user_repository.create_user(db, db_user)
+    await asyncio.to_thread(user_repository.create_user, db, db_user)
     
     return {"message": "User created successfully"}
 
