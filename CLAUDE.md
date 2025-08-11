@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Server Management
 
-- Start development server: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+- Start development server: `uvicorn app.main:app --reload --host 0.0.0.0 --port 9001`
 - Install dependencies: `pip install -r requirements.txt`
 
 ### Database Operations
