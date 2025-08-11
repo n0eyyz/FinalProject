@@ -2,7 +2,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import youtube, auth
+from app.routers import youtube, auth, jobs
 from app.dependencies import get_current_user # get_current_user 임포트
 
 app = FastAPI(title="Location Extractor API")
@@ -22,6 +22,7 @@ app.add_middleware(
 # auth 라우터는 인증 없이 접근 가능합니다.
 app.include_router(youtube.router)
 app.include_router(auth.router)
+app.include_router(jobs.router)
 
 # if __name__ == "__main__":
 #     uvicorn.run("app.main:app", host="0.0.0.0", port=1636, reload=True, ssl_keyfile = "C:/finalproject/certs/192.168.18.124+3-key.pem",
