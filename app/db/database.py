@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from typing import AsyncGenerator
 from sqlalchemy.engine.url import make_url
 from models import Base
 
@@ -31,16 +32,14 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     비동기 데이터베이스 세션을 생성하고 반환합니다.
     FastAPI의 Depends를 통해 의존성 주입에 사용됩니다.
+    `async with`를 사용하여 세션이 자동으로 닫히도록 보장합니다.
     """
-    async_session = AsyncSessionLocal()
-    try:
-        yield async_session
-    finally:
-        await async_session.close()
+    async with AsyncSessionLocal() as session:
+        yield session
 
 # 참고: 기존의 동기 get_db 함수는 더 이상 사용되지 않습니다.
 # 라우터와 리포지토리에서 이 새로운 get_db를 사용하고,
