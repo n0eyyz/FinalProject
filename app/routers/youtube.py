@@ -1,47 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
-from app.schemas.youtube import URLRequest, PlaceResponse, Place
+from app.schemas.youtube import URLRequest, PlaceResponse, Place, ApiVideoHistory
 from app.repositories import locations as loc_repo
 from app.utils import url as url_util
 from app.dependencies import get_current_user
 import models
 from typing import List, Optional
 import logging
-
-# <<< 추가: Pydantic 스키마 정의
-from pydantic import BaseModel, HttpUrl
-from datetime import datetime
-
-
-class Place(BaseModel):
-    name: str
-    lat: Optional[float] = None
-    lng: Optional[float] = None
-
-    model_config = {"from_attributes": True}
-
-
-class ApiVideoHistory(BaseModel):
-    id: str
-    title: Optional[str] = None
-    created_at: datetime
-    thumbnail_url: Optional[HttpUrl] = None
-    # <<< 변경: youtube_url을 Optional로 만들어 None 값을 허용합니다. 기존 db 데이터 고려.
-    youtube_url: Optional[HttpUrl] = None
-    places: List[Place] = []
-
-    model_config = {"from_attributes": True}
-
-
-class PlaceResponse(BaseModel):  # 기존 응답 모델
-    mode: str
-    places: List[Place]
-
-
-class URLRequest(BaseModel):  # 기존 요청 모델
-    url: str
-
 
 # 로거 설정
 logging.basicConfig(
@@ -54,49 +20,50 @@ router = APIRouter(
     tags=["youtube"],
 )
 
-
-def _process_url(db: Session, url: str, user_id: Optional[int] = None):
-    """URL 처리를 위한 내부 헬퍼 함수"""
+@router.post("/process", response_model=PlaceResponse)
+async def process_youtube_url(
+    request: URLRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.Users] = Depends(get_current_user), # Optional user
+):
+    """
+    YouTube URL을 비동기적으로 처리합니다.
+    - DB에 장소 정보가 있으면 즉시 반환합니다.
+    - 정보가 없으면, 백그라운드에서 장소 추출 작업을 시작하고 즉시 응답을 반환합니다.
+    - 로그인된 사용자의 경우 히스토리를 기록합니다.
+    """
+    user_id = current_user.user_id if current_user else None
     requester = f"user_id {user_id}" if user_id else "guest"
-    logger.info("=" * 50)
-    logger.info(f"URL 처리 시작: {url} (요청자: {requester})")
+    logger.info(f"URL 처리 시작: {request.url} (요청자: {requester})")
 
     try:
-        # 1. URL에서 비디오 ID 추출
-        video_id = url_util.extract_video_id(url)
+        video_id = url_util.extract_video_id(request.url)
         if not video_id:
             raise HTTPException(status_code=400, detail="Invalid YouTube URL")
-        logger.info(f"...비디오 ID 추출 성공: {video_id}")
 
-        # 2. DB에서 기존 정보 확인
-        existing_places = loc_repo.get_places_by_content_id(db, video_id)
+        # 1. DB에서 비동기적으로 기존 정보 확인
+        existing_places = await loc_repo.get_places_by_content_id(db, video_id)
         if existing_places:
-            logger.info(
-                f"...기존 장소 정보 {len(existing_places)}개 발견. 'db' 모드로 응답합니다."
-            )
+            logger.info(f"...기존 장소 정보 {len(existing_places)}개 발견. 'db' 모드로 응답합니다.")
             if user_id:
-                loc_repo.create_user_content_history(db, user_id, video_id)
-                logger.info(f"...사용자 {user_id} 히스토리 저장 완료.")
+                await loc_repo.create_user_content_history(db, user_id, video_id)
             return PlaceResponse(
                 mode="db", places=[Place.from_orm(p) for p in existing_places]
             )
 
-        # 3. DB에 정보가 없으면 새로 추출 및 저장
-        logger.info("...기존 정보 없음. 새로운 장소 추출 및 저장 시작...")
-        new_places = loc_repo.extract_and_save_locations(db, video_id, url)
-
-        if not new_places:
-            logger.info("...새로 추출된 장소가 없어 'new' 모드(빈 배열)로 응답합니다.")
-            return PlaceResponse(mode="new", places=[])
-
-        logger.info(
-            f"...새로운 장소 {len(new_places)}개 추출 및 저장 완료. 'new' 모드로 응답합니다."
-        )
+        # 2. DB에 정보가 없으면 백그라운드 작업으로 전환
+        logger.info("...기존 정보 없음. 백그라운드에서 장소 추출 및 저장 시작...")
+        
+        # 새로운 세션을 생성하는 백그라운드 함수를 호출합니다.
+        background_tasks.add_task(loc_repo.extract_and_save_locations, video_id, request.url)
+        
         if user_id:
-            loc_repo.create_user_content_history(db, user_id, video_id)
-            logger.info(f"...사용자 {user_id} 히스토리 저장 완료.")
+            # 히스토리는 즉시 저장 (어떤 영상을 보려고 했는지 기록)
+            await loc_repo.create_user_content_history(db, user_id, video_id)
 
-        return PlaceResponse(mode="new", places=[Place.from_orm(p) for p in new_places])
+        # 사용자에게는 장소가 없다는 응답을 즉시 보냄
+        return PlaceResponse(mode="new_processing", places=[])
 
     except HTTPException as e:
         logger.error(f"HTTP 예외 발생: {e.detail}")
@@ -107,48 +74,22 @@ def _process_url(db: Session, url: str, user_id: Optional[int] = None):
             status_code=500, detail=f"An unexpected server error occurred: {str(e)}"
         )
 
-
-@router.post("/process", response_model=PlaceResponse)
-def process_youtube_url_for_logged_in_user(
-    request: URLRequest,
-    db: Session = Depends(get_db),
-    current_user: models.Users = Depends(get_current_user),
-):
-    """
-    (로그인 사용자 전용) YouTube URL을 받아 장소 정보를 추출하고 사용자 히스토리를 기록합니다.
-    """
-    return _process_url(db, request.url, current_user.user_id)
-
-
-@router.post("/without-login/process", response_model=PlaceResponse)
-def process_youtube_url_for_guest(request: URLRequest, db: Session = Depends(get_db)):
-    """
-    (비로그인 사용자용) YouTube URL을 받아 장소 정보를 추출합니다. 히스토리는 기록하지 않습니다.
-    """
-    return _process_url(db, request.url, user_id=None)
-
-
-# <<< 변경: /history 엔드포인트를 완전히 새로 작성합니다.
 @router.get("/history", response_model=List[ApiVideoHistory])
-def get_user_content_history(
-    db: Session = Depends(get_db),
+async def get_user_content_history(
+    db: AsyncSession = Depends(get_db),
     current_user: models.Users = Depends(get_current_user),
 ):
     """
-    현재 로그인한 사용자의 콘텐츠 기록을 상세 정보와 함께 조회합니다.
+    현재 로그인한 사용자의 콘텐츠 기록을 상세 정보와 함께 비동기적으로 조회합니다.
     """
     logger.info(f"API /history 호출됨. 사용자: {current_user.email}")
-
-    history_records = loc_repo.get_user_history_details(db, current_user.user_id)
+    history_records = await loc_repo.get_user_history_details(db, current_user.user_id)
 
     response_data = []
     for record in history_records:
         if not record.content:
             continue
-
-        # places 리스트를 Place 스키마에 맞게 변환
         places_data = [Place.from_orm(p) for p in record.content.places]
-
         video_history = ApiVideoHistory(
             id=record.content.content_id,
             title=record.content.title,
@@ -159,19 +100,16 @@ def get_user_content_history(
         )
         response_data.append(video_history)
 
-    logger.info(
-        f"사용자 {current_user.email}의 콘텐츠 상세 기록 {len(response_data)}건 조회 완료."
-    )
+    logger.info(f"사용자 {current_user.email}의 콘텐츠 상세 기록 {len(response_data)}건 조회 완료.")
     return response_data
 
-
 @router.get("/places/{video_id}", response_model=List[Place])
-def get_places_for_video(video_id: str, db: Session = Depends(get_db)):
+async def get_places_for_video(video_id: str, db: AsyncSession = Depends(get_db)):
     """
-    특정 video_id에 해당하는 장소 목록을 조회합니다. (인증 불필요)
+    특정 video_id에 해당하는 장소 목록을 비동기적으로 조회합니다. (인증 불필요)
     """
     logger.info(f"API /places/{video_id} 호출됨.")
-    places = loc_repo.get_places_by_content_id(db, video_id)
+    places = await loc_repo.get_places_by_content_id(db, video_id)
     if not places:
         logger.warning(f"video_id {video_id}에 대한 장소 정보가 없습니다.")
         raise HTTPException(

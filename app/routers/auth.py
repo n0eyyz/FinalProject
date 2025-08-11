@@ -15,12 +15,12 @@ router = APIRouter(
 )
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
+async def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
     """
     새로운 사용자를 등록합니다. 이메일이 이미 등록되어 있으면 400 Bad Request를 반환합니다.
     비밀번호는 해싱되어 저장됩니다.
     """
-    db_user = user_repository.get_user_by_email(db, email=user.email)
+    db_user = await user_repository.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -29,7 +29,7 @@ def register(user: auth_schema.UserCreate, db: Session = Depends(get_db)):
     
     hashed_password = hash_utils.get_password_hash(user.password)
     db_user = models.Users(email=user.email, hashed_password=hashed_password)
-    user_repository.create_user(db, db_user)
+    await user_repository.create_user(db, db_user)
     
     return {"message": "User created successfully"}
 
