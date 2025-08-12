@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
-from app.schemas.youtube import URLRequest, PlaceResponse, Place, ApiVideoHistory
+from app.schemas.youtube import URLRequest, PlaceResponse, Place
 from app.repositories import locations as loc_repo
 from app.utils import url as url_util
 from app.dependencies import get_current_user
+from app.tasks import process_youtube_url
 import models
 from typing import List, Optional
 import logging
@@ -21,7 +22,7 @@ router = APIRouter(
 )
 
 from app.schemas.jobs import JobCreationResponse
-from app.tasks import process_video_placeholder
+from app.tasks import process_youtube_url
 
 @router.post("/process", response_model=JobCreationResponse, status_code=status.HTTP_202_ACCEPTED)
 async def process_youtube_url(
@@ -41,7 +42,7 @@ async def process_youtube_url(
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
     # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
-    task = process_video_placeholder.apply_async(args=[request.url])
+    task = process_youtube_url.apply_async(args=[request.url])
 
     # 사용자 히스토리는 즉시 저장
     if user_id:
@@ -52,34 +53,7 @@ async def process_youtube_url(
     # 클라이언트에게는 job_id를 포함한 응답을 즉시 보냅니다.
     return JobCreationResponse(job_id=task.id)
 
-@router.get("/history", response_model=List[ApiVideoHistory])
-async def get_user_content_history(
-    db: AsyncSession = Depends(get_db),
-    current_user: models.Users = Depends(get_current_user),
-):
-    """
-    현재 로그인한 사용자의 콘텐츠 기록을 상세 정보와 함께 비동기적으로 조회합니다.
-    """
-    logger.info(f"API /history 호출됨. 사용자: {current_user.email}")
-    history_records = await loc_repo.get_user_history_details(db, current_user.user_id)
 
-    response_data = []
-    for record in history_records:
-        if not record.content:
-            continue
-        places_data = [Place.from_orm(p) for p in record.content.places]
-        video_history = ApiVideoHistory(
-            id=record.content.content_id,
-            title=record.content.title,
-            created_at=record.created_at,
-            thumbnail_url=record.content.thumbnail_url,
-            youtube_url=record.content.youtube_url,
-            places=places_data,
-        )
-        response_data.append(video_history)
-
-    logger.info(f"사용자 {current_user.email}의 콘텐츠 상세 기록 {len(response_data)}건 조회 완료.")
-    return response_data
 
 @router.get("/places/{video_id}", response_model=List[Place])
 async def get_places_for_video(video_id: str, db: AsyncSession = Depends(get_db)):
