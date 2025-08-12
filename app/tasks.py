@@ -1,56 +1,61 @@
 from .celery_config import celery_app
-import time
+from app.utils.url import extract_video_id
+from app.services.extractor import ExtractorService
+from app.repositories.locations import save_extracted_data
+from app.db.database import AsyncSessionLocal
+import asyncio
 
 @celery_app.task(bind=True)
-def process_video_placeholder(self, url: str):
+def process_youtube_url(self, url: str):
     """
-    긴 비디오 처리 작업을 흉내 내는 기본 태스크입니다.
-    `bind=True`는 self 인자를 통해 태스크의 상태를 업데이트하고 컨텍스트에 접근할 수 있게 합니다.
+    YouTube URL을 받아 비동기적으로 영상 정보를 추출하고, 위치 정보를 분석하여 DB에 저장합니다.
     """
     job_id = self.request.id
     print(f"[Worker] 🚀 작업 시작! (Job ID: {job_id}, URL: {url})")
-    try:
-        # 1. 초기화 단계
-        print(f"[Worker] (Job ID: {job_id}) -> 1. 초기화 단계 진입")
-        self.update_state(
-            state='PROGRESS',
-            meta={'current_step': 'Initializing', 'progress': 10, 'url': url}
-        )
-        time.sleep(3)
 
-        # 2. 다운로드 및 분석 단계
-        print(f"[Worker] (Job ID: {job_id}) -> 2. 분석 단계 진입")
-        self.update_state(
-            state='PROGRESS',
-            meta={'current_step': 'Analyzing Video', 'progress': 50}
-        )
-        time.sleep(5)
+    video_id = extract_video_id(url)
+    if not video_id:
+        print(f"[Worker] ❌ 유효하지 않은 URL: {url}")
+        self.update_state(state='FAILURE', meta={'error_message': 'Invalid YouTube URL'})
+        return {'status': 'Failure', 'message': 'Invalid YouTube URL'}
 
-        # 3. 후처리 단계
-        print(f"[Worker] (Job ID: {job_id}) -> 3. 최종 처리 단계 진입")
-        self.update_state(
-            state='PROGRESS',
-            meta={'current_step': 'Finalizing', 'progress': 90}
-        )
-        time.sleep(2)
+    async def _run_async_processing():
+        """Celery 동기 태스크 내에서 비동기 로직을 실행하기 위한 래퍼 함수"""
+        try:
+            # 1. 초기화 및 추출 단계
+            self.update_state(
+                state='PROGRESS',
+                meta={'current_step': 'Extracting video data...', 'progress': 20}
+            )
+            extractor_service = ExtractorService()
+            transcript, locations, title, thumbnail_url = await extractor_service.extract_data_from_youtube(url)
 
-        print(f"[Worker] ✅ 작업 성공! (Job ID: {job_id})")
-        # 최종 결과 반환
-        return {
-            'status': 'Completed',
-            'source_url': url,
-            'places': [
-                {'name': '서울역', 'lat': 37.5547, 'lng': 126.9704},
-                {'name': 'N서울타워', 'lat': 37.5512, 'lng': 126.9882}
-            ],
-            'processing_time': 10.0
-        }
-    except Exception as e:
-        print(f"[Worker] ❌ 작업 실패! (Job ID: {job_id}), 오류: {e}")
-        # 실패 시 상태 업데이트
-        self.update_state(
-            state='FAILURE',
-            meta={'current_step': 'Error', 'progress': 0, 'error_message': str(e)}
-        )
-        # Celery가 에러를 인지하도록 예외를 다시 발생시킵니다.
-        raise
+            # 2. 데이터베이스 저장 단계
+            self.update_state(
+                state='PROGRESS',
+                meta={'current_step': 'Saving data to database...', 'progress': 70}
+            )
+            async with AsyncSessionLocal() as db:
+                saved_places = await save_extracted_data(
+                    db, video_id, url, transcript, locations, title, thumbnail_url
+                )
+            
+            print(f"[Worker] ✅ 작업 성공! (Job ID: {job_id})")
+            return {
+                'status': 'Completed',
+                'source_url': url,
+                'title': title,
+                'places': [{'name': p.name, 'lat': p.lat, 'lng': p.lng} for p in saved_places]
+            }
+
+        except Exception as e:
+            print(f"[Worker] ❌ 작업 실패! (Job ID: {job_id}), 오류: {e}")
+            self.update_state(
+                state='FAILURE',
+                meta={'current_step': 'Error', 'progress': 0, 'error_message': str(e)}
+            )
+            # 에러를 다시 발생시켜 Celery가 실패로 인지하도록 함
+            raise
+
+    # Celery의 동기 컨텍스트에서 비동기 함수를 실행
+    return asyncio.run(_run_async_processing())

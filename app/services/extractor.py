@@ -1,25 +1,35 @@
+import asyncio
 from crawlers.youtube import get_transcript_from_youtube
-from nlp.gemini_location import extract_locations_with_gemini
+from nlp.gemini_location import GeminiService
 
-
-# <<< 변경: 반환 타입을 튜플로 명시
-def extract_locations_from_youtube(
-    youtube_url: str,
-) -> tuple[str, list[dict], str, str]:
+class ExtractorService:
     """
-    YouTube URL에서 (스크립트, 장소, 제목, 썸네일) 정보를 추출하여 반환합니다.
+    YouTube 영상에서 스크립트와 위치 정보를 비동기적으로 추출하는 서비스입니다.
+    - 동기적인 크롤러 함수를 논블로킹 방식으로 실행합니다.
+    - 비동기적인 Gemini 서비스를 호출합니다.
     """
-    # <<< 변경: 제목과 썸네일을 함께 받음
-    transcript, title, thumbnail_url = get_transcript_from_youtube(youtube_url)
+    def __init__(self):
+        self.gemini_service = GeminiService()
 
-    if not transcript:
-        # 스크립트가 없어도 제목, 썸네일은 있을 수 있으므로 반환
-        return None, [], title, thumbnail_url
+    async def extract_data_from_youtube(self, youtube_url: str) -> tuple[str | None, list, str | None, str | None]:
+        """
+        YouTube URL에서 (스크립트, 장소 목록, 제목, 썸네일) 정보를 비동기적으로 추출하여 반환합니다.
+        """
+        print(f"➡️ ExtractorService: '{youtube_url}' 처리를 시작합니다.")
+        
+        # 1. 동기적인 크롤러 함수를 별도 스레드에서 실행하여 논블로킹으로 만듭니다.
+        print("➡️ YouTube 크롤러를 논블로킹으로 실행합니다...")
+        transcript, title, thumbnail_url = await asyncio.to_thread(
+            get_transcript_from_youtube, youtube_url
+        )
+        print("✅ YouTube 크롤러 작업 완료.")
 
-    locs_dict = extract_locations_with_gemini(transcript)
-    if isinstance(locs_dict, dict):
-        locations = locs_dict.get("locations", [])
-    else:
-        locations = locs_dict
+        if not transcript:
+            print("⚠️ 스크립트가 없어 위치 추출을 건너뜁니다.")
+            return None, [], title, thumbnail_url
 
-    return transcript, locations, title, thumbnail_url
+        # 2. 비동기 Gemini 서비스를 호출합니다.
+        locations = await self.gemini_service.extract_locations_from_transcript(transcript)
+        
+        print(f"✅ ExtractorService: '{youtube_url}' 처리 완료.")
+        return transcript, locations, title, thumbnail_url
