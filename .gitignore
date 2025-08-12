@@ -20,3 +20,4 @@ __pycache__/
 temp_audio.m4a
 temp_chunk_*.m4a
 *.vscode
+test.db
