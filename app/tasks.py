@@ -22,23 +22,30 @@ def process_youtube_url(self, url: str):
     async def _run_async_processing():
         """Celery 동기 태스크 내에서 비동기 로직을 실행하기 위한 래퍼 함수"""
         try:
-            # 1. 초기화 및 추출 단계
+            # 0-20%: YouTube URL 유효성 검사, 비디오 메타데이터 추출
             self.update_state(
                 state='PROGRESS',
-                meta={'current_step': 'Extracting video data...', 'progress': 20}
+                meta={'current_step': 'YouTube URL 유효성 검사 및 초기화 중...', 'progress': 10}
             )
-            extractor_service = ExtractorService()
+            
+            extractor_service = ExtractorService(self)
             transcript, locations, title, thumbnail_url = await extractor_service.extract_data_from_youtube(url)
 
-            # 2. 데이터베이스 저장 단계
+            # 70-90%: 데이터베이스 저장 준비
             self.update_state(
                 state='PROGRESS',
-                meta={'current_step': 'Saving data to database...', 'progress': 70}
+                meta={'current_step': '추출된 데이터 데이터베이스 저장 준비 중...', 'progress': 80}
             )
             async with AsyncSessionLocal() as db:
                 saved_places = await save_extracted_data(
                     db, video_id, url, transcript, locations, title, thumbnail_url
                 )
+            
+            # 90-100%: 데이터베이스 저장 및 최종 결과 준비
+            self.update_state(
+                state='PROGRESS',
+                meta={'current_step': '데이터베이스 저장 완료 및 최종 결과 준비 중...', 'progress': 95}
+            )
             
             print(f"[Worker] ✅ 작업 성공! (Job ID: {job_id})")
             return {

@@ -136,5 +136,6 @@ async def get_user_history_details(db: AsyncSession, user_id: int) -> list[UserC
             )
         )
         .order_by(UserContentHistory.created_at.desc())
+        .limit(50)
     )
     return result.scalars().all()

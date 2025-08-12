@@ -7,7 +7,8 @@ class GeminiService:
     """
     Google Gemini API를 사용하여 텍스트에서 위치 정보를 비동기적으로 추출하는 서비스입니다.
     """
-    def __init__(self):
+    def __init__(self, task_instance=None):
+        self.task_instance = task_instance
         self.model = genai.GenerativeModel('gemini-1.5-pro')
         self.prompt_template = """
 You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
@@ -50,15 +51,33 @@ JSON Result:
         """
         if not transcript:
             print("⚠️ 처리할 텍스트가 없어 장소 추출을 건너뜁니다.")
+            if self.task_instance:
+                self.task_instance.update_state(
+                    state='PROGRESS',
+                    meta={'current_step': '스크립트 없음. 위치 추출 건너뜀.', 'progress': 70}
+                )
             return []
 
         print("➡️ Gemini API로 장소 및 좌표 추출을 시작합니다. (비동기)")
         
+        if self.task_instance:
+            self.task_instance.update_state(
+                state='PROGRESS',
+                meta={'current_step': 'AI 모델을 통한 위치 정보 추출 및 분석 중 (Gemini API 호출)...', 'progress': 45}
+            )
+
         prompt = self.prompt_template.format(transcript=transcript)
         
         response = None
         try:
             response = await self.model.generate_content_async(prompt)
+            
+            if self.task_instance:
+                self.task_instance.update_state(
+                    state='PROGRESS',
+                    meta={'current_step': 'Gemini API 응답 처리 중...', 'progress': 60}
+                )
+
             result_text = response.text.strip().lstrip('```json').rstrip('```')
             locations = json.loads(result_text)
             print("✅ Gemini 장소 추출 완료.")
@@ -68,4 +87,9 @@ JSON Result:
             print(f"❌ Gemini API 처리 중 오류 발생: {e}")
             if response:
                 print(f"받은 응답: {response.text}")
+            if self.task_instance:
+                self.task_instance.update_state(
+                    state='FAILURE',
+                    meta={'current_step': 'AI 분석 실패', 'error_message': str(e)}
+                )
             return []
