@@ -139,7 +139,7 @@ async def get_job_result(job_id: str, db: AsyncSession = Depends(get_db)): # Add
             "error_message": str(task_result.info)
         }
 
-    result = await task_result.get()
+    result = task_result.get()
     return {
         "job_id": job_id,
         "status": "SUCCESS",
