@@ -56,12 +56,13 @@ def process_youtube_url(self, url: str):
             }
 
         except Exception as e:
-            print(f"[Worker] ❌ 작업 실패! (Job ID: {job_id}), 오류: {e}")
-            self.update_state(
-                state='FAILURE',
-                meta={'current_step': 'Error', 'progress': 0, 'error_message': str(e)}
-            )
-            # 에러를 다시 발생시켜 Celery가 실패로 인지하도록 함
+            import traceback
+            error_traceback = traceback.format_exc()
+            error_message = f"{type(e).__name__}: {e}\n{error_traceback}"
+            print(f"[Worker] ❌ 작업 실패! (Job ID: {job_id}), 오류: {error_message}")
+            
+            # Celery가 예외 정보를 올바르게 저장하도록 task.result를 설정
+            
             raise
 
     # Celery의 동기 컨텍스트에서 비동기 함수를 실행
