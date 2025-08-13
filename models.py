@@ -18,7 +18,7 @@ class Users(Base):
     user_id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.now(datetime.UTC))
 
 
 class Contents(Base):
@@ -39,7 +39,7 @@ class Contents(Base):
     content_type = Column(String(50), nullable=False)
     transcript = Column(Text)
     processed_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=datetime.datetime.now(datetime.UTC),
         onupdate=datetime.datetime.now(datetime.UTC),
     )
@@ -112,7 +112,11 @@ class UserContentHistory(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.user_id"))
     content_id = Column(String(255), ForeignKey("contents.content_id"))
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
+    created_at = Column(
+        DateTime(timezone=True),          # -> Postgres: TIMESTAMPTZ
+        server_default=func.now(),        # DB가 직접 현재시간(UTC) 채움
+        nullable=False,
+    )
     __table_args__ = (UniqueConstraint("user_id", "content_id"),)
 
     # <<< 추가: 쿼리 최적화를 위해 relationship을 추가합니다.
