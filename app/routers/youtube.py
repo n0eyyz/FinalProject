@@ -22,7 +22,7 @@ router = APIRouter(
 )
 
 from app.schemas.jobs import JobCreationResponse
-from app.tasks import process_youtube_url
+from app.tasks import process_youtube_url as process_youtube_url_task
 
 @router.post("/process", response_model=JobCreationResponse, status_code=status.HTTP_202_ACCEPTED)
 async def process_youtube_url(
@@ -52,7 +52,7 @@ async def process_youtube_url(
         return JobCreationResponse(job_id=cached_job_id)
 
     # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
-    task = process_youtube_url.apply_async(args=[request.url])
+    task = process_youtube_url_task.apply_async(args=[request.url])
 
     # 사용자 히스토리는 즉시 저장
     if user_id:
