@@ -10,6 +10,10 @@ from app.utils import hash as hash_utils
 from app.utils import token as token_utils
 from app.utils.email import send_email
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],
@@ -39,13 +43,26 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     """
     사용자 로그인을 처리하고, 유효한 자격 증명인 경우 액세스 토큰을 반환합니다.
     """
+    logger.info(f"Login attempt for email: {form_data.username}")
     db_user = await user_repository.get_user_by_email(db, email=form_data.username)
-    if not db_user or not hash_utils.verify_password(form_data.password, db_user.hashed_password):
+    
+    if not db_user:
+        logger.warning(f"Login failed: User {form_data.username} not found.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    logger.info(f"User found: {db_user.email}. Verifying password...")
+    if not hash_utils.verify_password(form_data.password, db_user.hashed_password):
+        logger.warning(f"Login failed: Incorrect password for {form_data.username}.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    logger.info(f"Password verified for {form_data.username}.")
     
     access_token = token_utils.create_access_token(data={"sub": db_user.email})
     return {"access_token": access_token, "token_type": "bearer"}

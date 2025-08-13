@@ -1,10 +1,14 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends # Added Depends
 from celery.result import AsyncResult
 from app.celery_config import celery_app
 from app.schemas.jobs import JobStatusResponse, JobResultResponse
+from app.schemas.users import Place # Import Place from users schema
 import logging
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession # Added AsyncSession
+from app.db.database import get_db # Added get_db
+from app.repositories import locations as loc_repo # Added loc_repo
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +25,22 @@ active_connections: dict[str, list[WebSocket]] = {}
 @router.websocket("/ws/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
     await websocket.accept()
+    logger.info(f"WebSocket connected for job_id: {job_id}")
+
+    if job_id.startswith("cached_"):
+        # For cached jobs, send immediate success and close
+        await websocket.send_json({
+            "status": "SUCCESS",
+            "meta": {"current_step": "Completed (Cached)", "progress": 100}
+        })
+        await websocket.close()
+        logger.info(f"WebSocket for cached job_id {job_id} closed after sending success.")
+        return
+
     if job_id not in active_connections:
         active_connections[job_id] = []
     active_connections[job_id].append(websocket)
-    logger.info(f"WebSocket connected for job_id: {job_id}")
-
+    
     try:
         while True:
             # Get task status from Celery result backend
@@ -53,9 +68,26 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
         await websocket.close()
 
 @router.get("/{job_id}/status", response_model=JobStatusResponse)
-def get_job_status(job_id: str):
+async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)): # Add db dependency
     """Celery 작업 ID를 사용하여 작업의 현재 상태와 진행률을 조회합니다."""
     logger.info(f"[API] Job 상태 확인 요청: {job_id}")
+
+    if job_id.startswith("cached_"):
+        video_id = job_id.replace("cached_", "")
+        # Check if the content actually exists in DB for this cached_job_id
+        content = await loc_repo.get_content_by_id(db, video_id) # Use loc_repo
+        if content:
+            response = {
+                "job_id": job_id,
+                "status": "SUCCESS",
+                "progress": 100,
+                "current_step": "Completed (Cached)"
+            }
+            return response
+        else:
+            # If it's a cached_job_id but content not found, treat as not found
+            raise HTTPException(status_code=404, detail="Cached job not found or expired.")
+
     task_result = AsyncResult(job_id, app=celery_app)
 
     response = {
@@ -76,9 +108,22 @@ def get_job_status(job_id: str):
     return response
 
 @router.get("/{job_id}/result", response_model=JobResultResponse)
-def get_job_result(job_id: str):
+async def get_job_result(job_id: str, db: AsyncSession = Depends(get_db)): # Add db dependency
     """Celery 작업 ID를 사용하여 작업의 최종 결과를 조회합니다."""
     logger.info(f"[API] Job 결과 확인 요청: {job_id}")
+
+    if job_id.startswith("cached_"):
+        video_id = job_id.replace("cached_", "")
+        places = await loc_repo.get_places_by_content_id(db, video_id)
+        if not places:
+            raise HTTPException(status_code=404, detail="Cached result not found.")
+        return {
+            "job_id": job_id,
+            "status": "SUCCESS",
+            "places": [Place.from_orm(p) for p in places],
+            "processing_time": 0 # Cached result, so 0 or N/A
+        }
+
     task_result = AsyncResult(job_id, app=celery_app)
 
     if not task_result.ready():
@@ -94,7 +139,7 @@ def get_job_result(job_id: str):
             "error_message": str(task_result.info)
         }
 
-    result = task_result.get()
+    result = await task_result.get()
     return {
         "job_id": job_id,
         "status": "SUCCESS",

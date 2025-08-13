@@ -9,7 +9,7 @@ class GeminiService:
     """
     def __init__(self, task_instance=None):
         self.task_instance = task_instance
-        self.model = genai.GenerativeModel('gemini-1.5-pro')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.prompt_template = """
 You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
 Your task is to identify all the specific names of places like restaurants, cafes, bakeries, and food stalls that the vlogger visits or mentions in the provided script.

@@ -41,6 +41,16 @@ async def process_youtube_url(
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
+    # 1. 캐시 확인: 이미 분석된 비디오인지 데이터베이스에서 확인
+    existing_content = await loc_repo.get_content_by_id(db, video_id)
+    if existing_content:
+        cached_job_id = f"cached_{video_id}"
+        logger.info(f"이미 분석된 비디오: {video_id}. 캐시된 job_id {cached_job_id} 반환.")
+        # 사용자 히스토리는 즉시 저장 (캐시된 경우에도 기록)
+        if user_id:
+            await loc_repo.create_user_content_history(db, user_id, video_id)
+        return JobCreationResponse(job_id=cached_job_id)
+
     # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
     task = process_youtube_url.apply_async(args=[request.url])
 
