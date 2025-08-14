@@ -53,6 +53,9 @@ async def process_youtube_url(
 
     # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
     # 사용자 ID(user_id)도 함께 인자로 전달합니다.
+    # task = process_youtube_url_task.apply_async(args=[request.url, user_id])
+    # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
+    # 사용자 ID(user_id)도 함께 인자로 전달합니다.
     task = process_youtube_url_task.apply_async(args=[request.url, user_id])
 
     logger.info(f"작업이 성공적으로 큐에 등록되었습니다. Job ID: {task.id}, user_id: {user_id}")

@@ -1,5 +1,5 @@
 import asyncio
-from crawlers.youtube import get_transcript_from_youtube
+from crawlers.youtube import get_youtube_metadata, get_youtube_transcript_only
 from nlp.gemini_location import GeminiService
 
 class ExtractorService:
@@ -24,12 +24,15 @@ class ExtractorService:
                 meta={'current_step': 'YouTube 비디오 메타데이터 추출 및 스크립트 다운로드 중...', 'progress': 20}
             )
 
-        # 1. 동기적인 크롤러 함수를 별도 스레드에서 실행하여 논블로킹으로 만듭니다.
-        print("➡️ YouTube 크롤러를 논블로킹으로 실행합니다...")
-        transcript, title, thumbnail_url = await asyncio.to_thread(
-            get_transcript_from_youtube, youtube_url
-        )
-        print("✅ YouTube 크롤러 작업 완료.")
+        # 1. 메타데이터와 스크립트 추출을 동시에 시작합니다.
+        print("➡️ YouTube 메타데이터 및 스크립트 추출을 논블로킹으로 실행합니다...")
+        metadata_task = asyncio.to_thread(get_youtube_metadata, youtube_url)
+        transcript_task = get_youtube_transcript_only(youtube_url)
+
+        # 두 작업을 동시에 기다립니다.
+        (title, thumbnail_url), transcript = await asyncio.gather(metadata_task, transcript_task)
+        
+        print("✅ YouTube 메타데이터 및 스크립트 추출 작업 완료.")
 
         if self.task_instance:
             self.task_instance.update_state(
