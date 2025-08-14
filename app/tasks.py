@@ -5,13 +5,15 @@ from app.repositories.locations import save_extracted_data
 from app.db.database import AsyncSessionLocal
 import asyncio
 
+from app.repositories.locations import create_user_content_history
+
 @celery_app.task(bind=True)
-def process_youtube_url(self, url: str):
+def process_youtube_url(self, url: str, user_id: int | None = None):
     """
     YouTube URL을 받아 비동기적으로 영상 정보를 추출하고, 위치 정보를 분석하여 DB에 저장합니다.
     """
     job_id = self.request.id
-    print(f"[Worker] 🚀 작업 시작! (Job ID: {job_id}, URL: {url})")
+    print(f"[Worker] 🚀 작업 시작! (Job ID: {job_id}, URL: {url}, User ID: {user_id})")
 
     video_id = extract_video_id(url)
     if not video_id:
@@ -40,6 +42,12 @@ def process_youtube_url(self, url: str):
                 saved_places = await save_extracted_data(
                     db, video_id, url, transcript, locations, title, thumbnail_url
                 )
+
+                # 사용자 기록 저장 (콘텐츠 저장이 완료된 후에만)
+                # 사용자 기록 저장 (콘텐츠 저장이 완료된 후에만)
+                if user_id:
+                    print(f"[Worker] 📝 사용자 기록 저장 시도: user_id={user_id}, video_id={video_id}")
+                    await create_user_content_history(db, user_id, video_id)
             
             # 90-100%: 데이터베이스 저장 및 최종 결과 준비
             self.update_state(

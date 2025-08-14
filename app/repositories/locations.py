@@ -109,14 +109,19 @@ async def save_extracted_data(
     return saved_places
 
 async def create_user_content_history(db: AsyncSession, user_id: int, content_id: str):
+    print(f"[Repo] create_user_content_history 호출됨: user_id={user_id}, content_id={content_id}")
     if not user_id:
+        print("[Repo] user_id가 없어 create_user_content_history 건너뜀.")
         return
     hist = UserContentHistory(user_id=user_id, content_id=content_id)
     db.add(hist)
     try:
         await db.commit()
-    except IntegrityError:
+        print(f"[Repo] UserContentHistory 성공적으로 저장됨: user_id={user_id}, content_id={content_id}")
+    except IntegrityError as e:
         await db.rollback()
+        print(f"[Repo] UserContentHistory 저장 중 IntegrityError 발생: {e}")
+        print(f"[Repo] 롤백됨. user_id={user_id}, content_id={content_id}")
 
 async def get_places_by_content_id(db: AsyncSession, content_id: str) -> list[Places]:
     result = await db.execute(

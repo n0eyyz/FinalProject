@@ -52,13 +52,10 @@ async def process_youtube_url(
         return JobCreationResponse(job_id=cached_job_id)
 
     # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
-    task = process_youtube_url_task.apply_async(args=[request.url])
+    # 사용자 ID(user_id)도 함께 인자로 전달합니다.
+    task = process_youtube_url_task.apply_async(args=[request.url, user_id])
 
-    # 사용자 히스토리는 즉시 저장
-    if user_id:
-        await loc_repo.create_user_content_history(db, user_id, video_id)
-
-    logger.info(f"작업이 성공적으로 큐에 등록되었습니다. Job ID: {task.id}")
+    logger.info(f"작업이 성공적으로 큐에 등록되었습니다. Job ID: {task.id}, user_id: {user_id}")
 
     # 클라이언트에게는 job_id를 포함한 응답을 즉시 보냅니다.
     return JobCreationResponse(job_id=task.id)

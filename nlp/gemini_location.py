@@ -9,7 +9,6 @@ class GeminiService:
     """
     def __init__(self, task_instance=None):
         self.task_instance = task_instance
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.prompt_template = """
 You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
 Your task is to identify all the specific names of places like restaurants, cafes, bakeries, and food stalls that the vlogger visits or mentions in the provided script.
@@ -68,9 +67,15 @@ JSON Result:
 
         prompt = self.prompt_template.format(transcript=transcript)
         
+        # API 키 설정 (함수 호출 시마다 설정하여 이벤트 루프 문제 방지 시도)
+        genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = None
         try:
-            response = await self.model.generate_content_async(prompt)
+            print("DEBUG: Gemini API 호출 직전.")
+            response = await model.generate_content_async(prompt)
+            print("DEBUG: Gemini API 호출 완료.")
             
             if self.task_instance:
                 self.task_instance.update_state(

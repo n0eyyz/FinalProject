@@ -1,5 +1,6 @@
 from sqlalchemy import *
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import func
 import datetime
 
 Base = declarative_base()
