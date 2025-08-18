@@ -74,4 +74,14 @@ def process_youtube_url(self, url: str, user_id: int | None = None):
             raise
 
     # Celery의 동기 컨텍스트에서 비동기 함수를 실행
-    return asyncio.run(_run_async_processing())
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop()
+        try:
+            return loop.run_until_complete(_run_async_processing)
+        finally:
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    finally:
+        asyncio.set_event_loop(None)
