@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 
 SECRET_KEY = "your-secret-key"  # This should be loaded from environment variables
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 15
 
 def create_access_token(data: dict):
