@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.schemas.youtube import URLRequest, PlaceResponse, Place
@@ -21,17 +21,14 @@ router = APIRouter(
     tags=["youtube"],
 )
 
-from app.schemas.jobs import JobCreationResponse
-from app.tasks import process_youtube_url as process_youtube_url_task
-
-@router.post("/process", response_model=JobCreationResponse, status_code=status.HTTP_202_ACCEPTED)
-async def process_youtube_url(
+@router.post("/process", response_model=PlaceResponse, status_code=status.HTTP_200_OK)
+async def process_youtube_url_and_get_places(
     request: URLRequest,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[models.Users] = Depends(get_current_user), # Optional user
 ):
     """
-    YouTube URL 처리를 위한 작업을 Celery 큐에 등록하고 즉시 job_id를 반환합니다.
+    YouTube URL을 받아 동기적으로 처리하고, 추출된 장소 목록을 반환합니다.
     """
     user_id = current_user.user_id if current_user else None
     requester = f"user_id {user_id}" if user_id else "guest"
@@ -44,24 +41,26 @@ async def process_youtube_url(
     # 1. 캐시 확인: 이미 분석된 비디오인지 데이터베이스에서 확인
     existing_content = await loc_repo.get_content_by_id(db, video_id)
     if existing_content:
-        cached_job_id = f"cached_{video_id}"
-        logger.info(f"이미 분석된 비디오: {video_id}. 캐시된 job_id {cached_job_id} 반환.")
-        # 사용자 히스토리는 즉시 저장 (캐시된 경우에도 기록)
+        logger.info(f"이미 분석된 비디오: {video_id}. 캐시된 결과 반환.")
         if user_id:
             await loc_repo.create_user_content_history(db, user_id, video_id)
-        return JobCreationResponse(job_id=cached_job_id)
+        places = await loc_repo.get_places_by_content_id(db, video_id)
+        return PlaceResponse(mode="db", places=[Place.from_orm(p) for p in places])
 
-    # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
-    # 사용자 ID(user_id)도 함께 인자로 전달합니다.
-    # task = process_youtube_url_task.apply_async(args=[request.url, user_id])
-    # Celery 작업을 비동기적으로 실행하고 task 객체를 받습니다.
-    # 사용자 ID(user_id)도 함께 인자로 전달합니다.
-    task = process_youtube_url_task.apply_async(args=[request.url, user_id])
+    # 2. Celery가 없으므로 직접 함수를 호출합니다.
+    try:
+        result = await process_youtube_url(request.url, user_id)
+        if result.get('status') == 'Failure':
+            raise HTTPException(status_code=400, detail=result.get('message'))
+        
+        # 결과에서 장소 목록을 가져와서 반환합니다.
+        places_data = result.get("places", [])
+        places = [Place(**p) for p in places_data]
+        return PlaceResponse(mode="new", places=places)
 
-    logger.info(f"작업이 성공적으로 큐에 등록되었습니다. Job ID: {task.id}, user_id: {user_id}")
-
-    # 클라이언트에게는 job_id를 포함한 응답을 즉시 보냅니다.
-    return JobCreationResponse(job_id=task.id)
+    except Exception as e:
+        logger.error(f"URL 처리 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

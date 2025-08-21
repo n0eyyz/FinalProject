@@ -7,10 +7,8 @@ class GeminiService:
     """
     Google Gemini API를 사용하여 텍스트에서 위치 정보를 비동기적으로 추출하는 서비스입니다.
     """
-    def __init__(self, task_instance=None):
-        self.task_instance = task_instance
-        self.prompt_template = """
-You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
+    def __init__(self):
+        self.prompt_template = """You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
 Your task is to identify all the specific names of places like restaurants, cafes, bakeries, and food stalls that the vlogger visits or mentions in the provided script.
 
 **Instructions:**
@@ -50,39 +48,22 @@ JSON Result:
         """
         if not transcript:
             print("⚠️ 처리할 텍스트가 없어 장소 추출을 건너뜁니다.")
-            if self.task_instance:
-                self.task_instance.update_state(
-                    state='PROGRESS',
-                    meta={'current_step': '스크립트 없음. 위치 추출 건너뜀.', 'progress': 70}
-                )
             return []
 
         print("➡️ Gemini API로 장소 및 좌표 추출을 시작합니다. (비동기)")
         
-        if self.task_instance:
-            self.task_instance.update_state(
-                state='PROGRESS',
-                meta={'current_step': 'AI 모델을 통한 위치 정보 추출 및 분석 중 (Gemini API 호출)...', 'progress': 45}
-            )
-
         prompt = self.prompt_template.format(transcript=transcript)
         
         # API 키 설정 (함수 호출 시마다 설정하여 이벤트 루프 문제 방지 시도)
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = None
         try:
             print("DEBUG: Gemini API 호출 직전.")
             response = await model.generate_content_async(prompt)
             print("DEBUG: Gemini API 호출 완료.")
             
-            if self.task_instance:
-                self.task_instance.update_state(
-                    state='PROGRESS',
-                    meta={'current_step': 'Gemini API 응답 처리 중...', 'progress': 60}
-                )
-
             result_text = response.text.strip().lstrip('```json').rstrip('```')
             locations = json.loads(result_text)
             print("✅ Gemini 장소 추출 완료.")
@@ -92,9 +73,4 @@ JSON Result:
             print(f"❌ Gemini API 처리 중 오류 발생: {e}")
             if response:
                 print(f"받은 응답: {response.text}")
-            if self.task_instance:
-                self.task_instance.update_state(
-                    state='FAILURE',
-                    meta={'current_step': 'AI 분석 실패', 'error_message': str(e)}
-                )
             return []

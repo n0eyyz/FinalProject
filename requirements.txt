@@ -1,7 +1,6 @@
 aiosmtplib==3.0.2
 aiosqlite==0.21.0
 alembic==1.16.4
-amqp==5.3.1
 annotated-types==0.7.0
 antiorm==1.2.1
 anyio==4.9.0
@@ -9,11 +8,9 @@ asyncpg==0.30.0
 attrs==25.3.0
 audioread==3.0.1
 bcrypt==3.2.2
-billiard==4.2.1
 blinker==1.9.0
 branca==0.8.1
 cachetools==5.5.2
-celery==5.5.3
 certifi==2025.7.14
 cffi==1.17.1
 charset-normalizer==3.4.2
@@ -34,7 +31,6 @@ email_validator==2.2.0
 fastapi==0.116.1
 fastapi-mail==1.5.0
 filelock==3.18.0
-flower==2.0.1
 folium==0.20.0
 fsspec==2025.7.0
 google-ai-generativelanguage==0.6.15
@@ -61,7 +57,6 @@ iniconfig==2.1.0
 Jinja2==3.1.6
 jiter==0.10.0
 joblib==1.5.1
-kombu==5.5.4
 lazy_loader==0.4
 librosa==0.11.0
 llvmlite==0.44.0
@@ -120,7 +115,7 @@ redis==5.2.1
 regex==2024.11.6
 requests==2.32.4
 rsa==4.9.1
-safetensors==0.5.3
+safetensors==0.5.2
 scikit-image==0.25.2
 scikit-learn==1.7.0
 scipy==1.16.0
@@ -151,7 +146,6 @@ tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.35.0
-vine==5.1.0
 wcwidth==0.2.13
 webdriver-manager==4.0.2
 websocket-client==1.8.0

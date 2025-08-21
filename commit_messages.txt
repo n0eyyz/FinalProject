@@ -1,0 +1,3 @@
+refactor: Remove Celery and related files
+feat: Implement synchronous video processing within API request
+chore: Clean up and deduplicate requirements.txt

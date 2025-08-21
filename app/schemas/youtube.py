@@ -23,7 +23,9 @@ class Place(BaseModel):
 class PlaceResponse(BaseModel):
     """
     장소 추출 결과 응답을 위한 Pydantic 스키마.
-    데이터베이스에서 가져왔는지(db) 새로 추출했는지(new)를 나타내는 모드와 장소 목록을 포함합니다.
+    데이터베이스에서 가져왔는지(db) 새로 추출했는지(new)를
+    나타내는 모드와 장소 목록을 포함합니다.
+    장소 목록을 포함합니다.
     """
     mode: str # "db", "new", 또는 "new_processing"
     places: List[Place]
