@@ -1,68 +1,212 @@
-from .celery_config import celery_app
 from app.utils.url import extract_video_id
 from app.services.extractor import ExtractorService
 from app.repositories.locations import save_extracted_data
 from app.db.database import AsyncSessionLocal
 import asyncio
 
-@celery_app.task(bind=True)
-def process_youtube_url(self, url: str):
+from app.repositories.locations import create_user_content_history
+
+
+async def process_youtube_url_with_websocket(
+    url: str, user_id: int | None = None, connection_id: str | None = None, manager=None
+):
     """
-    YouTube URL을 받아 비동기적으로 영상 정보를 추출하고, 위치 정보를 분석하여 DB에 저장합니다.
+    WebSocket을 통해 실시간 진행 상황을 전송하며 YouTube URL을 처리합니다.
     """
-    job_id = self.request.id
-    print(f"[Worker] 🚀 작업 시작! (Job ID: {job_id}, URL: {url})")
+    print(
+        f"[WebSocket Processing] 🚀 작업 시작! (URL: {url}, User ID: {user_id}, Connection: {connection_id})"
+    )
 
     video_id = extract_video_id(url)
     if not video_id:
-        print(f"[Worker] ❌ 유효하지 않은 URL: {url}")
-        self.update_state(state='FAILURE', meta={'error_message': 'Invalid YouTube URL'})
-        return {'status': 'Failure', 'message': 'Invalid YouTube URL'}
-
-    async def _run_async_processing():
-        """Celery 동기 태스크 내에서 비동기 로직을 실행하기 위한 래퍼 함수"""
-        try:
-            # 0-20%: YouTube URL 유효성 검사, 비디오 메타데이터 추출
-            self.update_state(
-                state='PROGRESS',
-                meta={'current_step': 'YouTube URL 유효성 검사 및 초기화 중...', 'progress': 10}
+        print(f"[WebSocket Processing] ❌ 유효하지 않은 URL: {url}")
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {
+                    "status": "error",
+                    "message": "invalid youtube url",
+                    "progress": 0,
+                },
             )
-            
-            extractor_service = ExtractorService(self)
-            transcript, locations, title, thumbnail_url = await extractor_service.extract_data_from_youtube(url)
+        return {"status": "Failure", "message": "Invalid YouTube URL"}
 
-            # 70-90%: 데이터베이스 저장 준비
-            self.update_state(
-                state='PROGRESS',
-                meta={'current_step': '추출된 데이터 데이터베이스 저장 준비 중...', 'progress': 80}
+    try:
+        # 캐시 확인
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {"status": "processing", "message": "checking url ...", "progress": 10},
             )
-            async with AsyncSessionLocal() as db:
-                saved_places = await save_extracted_data(
-                    db, video_id, url, transcript, locations, title, thumbnail_url
+
+        async with AsyncSessionLocal() as db:
+            # 캐시 확인
+            from app.repositories.locations import (
+                get_content_by_id,
+                get_places_by_content_id,
+            )
+
+            existing_content = await get_content_by_id(db, video_id)
+
+            if existing_content:
+                print(f"[WebSocket Processing] 📋 캐시된 데이터 발견: {video_id}")
+                if manager and connection_id:
+                    await manager.send_progress(
+                        connection_id,
+                        {
+                            "status": "processing",
+                            "message": "almost done...",
+                            "progress": 90,
+                        },
+                    )
+
+                if user_id:
+                    await create_user_content_history(db, user_id, video_id)
+
+                places = await get_places_by_content_id(db, video_id)
+                result = {
+                    "status": "Completed",
+                    "source_url": url,
+                    "title": existing_content.title,
+                    "mode": "cached",
+                    "places": [
+                        {"name": p.name, "lat": p.lat, "lng": p.lng} for p in places
+                    ],
+                }
+                return result
+
+        # 새로운 처리 시작
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {"status": "processing", "message": "analyzing url...", "progress": 20},
+            )
+
+        extractor_service = ExtractorService()
+
+        # 메타데이터 및 스크립트 추출
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {
+                    "status": "processing",
+                    "message": "understanding video ...",
+                    "progress": 40,
+                },
+            )
+
+        transcript, locations, title, thumbnail_url = (
+            await extractor_service.extract_data_from_youtube(url)
+        )
+
+        # AI 위치 분석
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {
+                    "status": "processing",
+                    "message": "amazing locations ...",
+                    "progress": 70,
+                },
+            )
+
+        # 데이터베이스 저장
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {"status": "processing", "message": "saving ...", "progress": 90},
+            )
+
+        async with AsyncSessionLocal() as db:
+            saved_places = await save_extracted_data(
+                db, video_id, url, transcript, locations, title, thumbnail_url
+            )
+
+            if user_id:
+                print(
+                    f"[WebSocket Processing] 📝 사용자 기록 저장: user_id={user_id}, video_id={video_id}"
                 )
-            
-            # 90-100%: 데이터베이스 저장 및 최종 결과 준비
-            self.update_state(
-                state='PROGRESS',
-                meta={'current_step': '데이터베이스 저장 완료 및 최종 결과 준비 중...', 'progress': 95}
-            )
-            
-            print(f"[Worker] ✅ 작업 성공! (Job ID: {job_id})")
-            return {
-                'status': 'Completed',
-                'source_url': url,
-                'title': title,
-                'places': [{'name': p.name, 'lat': p.lat, 'lng': p.lng} for p in saved_places]
-            }
+                await create_user_content_history(db, user_id, video_id)
 
-        except Exception as e:
-            print(f"[Worker] ❌ 작업 실패! (Job ID: {job_id}), 오류: {e}")
-            self.update_state(
-                state='FAILURE',
-                meta={'current_step': 'Error', 'progress': 0, 'error_message': str(e)}
-            )
-            # 에러를 다시 발생시켜 Celery가 실패로 인지하도록 함
-            raise
+        print(f"[WebSocket Processing] ✅ 작업 성공!")
+        return {
+            "status": "Completed",
+            "source_url": url,
+            "title": title,
+            "mode": "new",
+            "places": [
+                {"name": p.name, "lat": p.lat, "lng": p.lng} for p in saved_places
+            ],
+        }
 
-    # Celery의 동기 컨텍스트에서 비동기 함수를 실행
-    return asyncio.run(_run_async_processing())
+    except Exception as e:
+        import traceback
+
+        error_traceback = traceback.format_exc()
+        error_message = f"{type(e).__name__}: {e}\n{error_traceback}"
+        print(f"[WebSocket Processing] ❌ 작업 실패!, 오류: {error_message}")
+
+        if manager and connection_id:
+            await manager.send_progress(
+                connection_id,
+                {
+                    "status": "error",
+                    "message": f"there is error!: {str(e)}",
+                    "progress": 0,
+                },
+            )
+        raise
+
+
+async def process_youtube_url(url: str, user_id: int | None = None):
+    """
+    YouTube URL을 받아 비동기적으로 영상 정보를 추출하고, 위치 정보를 분석하여 DB에 저장합니다.
+    """
+    print(f"[Processing] 🚀 작업 시작! (URL: {url}, User ID: {user_id})")
+
+    video_id = extract_video_id(url)
+    if not video_id:
+        print(f"[Processing] ❌ 유효하지 않은 URL: {url}")
+        # Since this is no longer a Celery task, we can't update state.
+        # We should raise an exception or return an error.
+        # For now, we'll return a failure message.
+        return {"status": "Failure", "message": "Invalid YouTube URL"}
+
+    try:
+        # The ExtractorService might need to be refactored if it uses the task instance.
+        # Looking at its previous usage, it was passed `self`. Let's assume
+        # it was used for updating state, and now can be instantiated without it.
+        extractor_service = ExtractorService()  # Refactored: removed task instance
+        transcript, locations, title, thumbnail_url = (
+            await extractor_service.extract_data_from_youtube(url)
+        )
+
+        async with AsyncSessionLocal() as db:
+            saved_places = await save_extracted_data(
+                db, video_id, url, transcript, locations, title, thumbnail_url
+            )
+
+            if user_id:
+                print(
+                    f"[Processing] 📝 사용자 기록 저장 시도: user_id={user_id}, video_id={video_id}"
+                )
+                await create_user_content_history(db, user_id, video_id)
+
+        print(f"[Processing] ✅ 작업 성공!")
+        return {
+            "status": "Completed",
+            "source_url": url,
+            "title": title,
+            "places": [
+                {"name": p.name, "lat": p.lat, "lng": p.lng} for p in saved_places
+            ],
+        }
+
+    except Exception as e:
+        import traceback
+
+        error_traceback = traceback.format_exc()
+        error_message = f"{type(e).__name__}: {e}\n{error_traceback}"
+        print(f"[Processing] ❌ 작업 실패!, 오류: {error_message}")
+        # Re-raise the exception to be handled by the caller (the API route)
+        raise

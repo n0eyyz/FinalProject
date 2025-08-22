@@ -1,23 +1,40 @@
-*.mp3
-*.env
-*.json
-finalproject-466106-c573b3aefa34.json/
-
-민감한 정보
-.env
-certs/
-
-파이썬 가상환경
-venv/
-.venv/
-pind_server_venv/
-
-파이썬 캐시
+# Python cache directories
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-테스트 결과물
-temp_audio.m4a
-temp_chunk_*.m4a
-*.vscode
-test.db
+# Celery
+celerybeat.pid
+celeryd.pid
+
+# IDEs
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+virtualenv/
+virtualenvs/
+venv/
+env/
+.env/
+/.env
+
+# Database
+*.sqlite3
+*.db
+
+# Logs
+*.log
+
+# Test results
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Custom additions
+nlp/__pycache__/

@@ -1,8 +1,10 @@
 # app/db/database.py
-import os
+import os, ssl
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from typing import AsyncGenerator
 from sqlalchemy.engine.url import make_url
 from models import Base
@@ -12,16 +14,50 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 ENV_PATH = ROOT_DIR / ".env"
 load_dotenv(ENV_PATH)
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
-if not DATABASE_URL:
+rawdb = (os.getenv("DATABASE_URL") or "").strip().strip('"').strip("'")
+if not rawdb:
     raise ValueError("DATABASE_URL (또는 DB_URL) 이 설정되지 않았습니다.")
 
+if rawdb.startswith("postgres://"):
+    async_db_url = rawdb.replace("postgres://", "postgresql+asyncpg://", 1)
+elif rawdb.startswith("postgresql://"):
+    async_db_url = rawdb.replace("postgresql://", "postgresql+asyncpg://", 1)
+else:
+    async_db_url = rawdb
+
 # DB URL을 asyncpg에 맞게 변경
-async_db_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-print(f"[DB_DEBUG] Connecting to async database: {async_db_url}")
+print(f"[DB_DEBUG] USING ASYNC_DB_URL = {async_db_url}")
+
+# (1) 엄격 모드: 정상 경로 (가능하면 이걸 사용)
+strict_ctx = ssl.create_default_context()
+
+# (2) 느슨 모드: 검증 끔(개발/임시용)
+insecure_ctx = ssl.create_default_context()
+insecure_ctx.check_hostname = False
+insecure_ctx.verify_mode = ssl.CERT_NONE
+
+# 환경변수로 토글 (없으면 기본=엄격)
+USE_INSECURE = os.getenv("DB_SSL_INSECURE", "").lower() in ("1","true","yes")
+
+# 동적 prepared statement 이름 생성 함수
+def prepared_statement_name_func():
+    """각 prepared statement에 고유한 이름을 생성하여 중복 오류를 방지합니다."""
+    return f"stmt_{uuid.uuid4().hex[:8]}"
 
 # 비동기 엔진 생성
-engine = create_async_engine(async_db_url, pool_pre_ping=True, echo=False)
+engine = create_async_engine(
+    async_db_url,
+    pool_pre_ping=True,
+    poolclass=NullPool,  # 연결 풀링 비활성화로 prepared statement 충돌 방지
+    execution_options={
+        "prepared_cache_size": 0,  # prepared statement 캐싱 비활성화
+    },
+    connect_args={
+        "ssl": insecure_ctx if USE_INSECURE else strict_ctx,
+        "statement_cache_size": 0,  # asyncpg 레벨에서도 캐싱 비활성화
+        "prepared_statement_name_func": prepared_statement_name_func,  # 동적 이름 생성
+    },
+)
 
 # 비동기 세션 메이커
 AsyncSessionLocal = async_sessionmaker(
