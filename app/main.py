@@ -2,7 +2,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import youtube, auth, users
+from app.routers import youtube, auth, users, websocket
 
 app = FastAPI(title="Location Extractor API")
 
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(youtube.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(websocket.router)
 
 # if __name__ == "__main__":
 #     uvicorn.run("app.main:app", host="0.0.0.0", port=1636, reload=True, ssl_keyfile = "C:/finalproject/certs/192.168.18.124+3-key.pem",
