@@ -38,3 +38,7 @@ htmlcov/
 
 # Custom additions
 nlp/__pycache__/
+
+verifier/
+poc_link_extractor/
+poc_youtube_tool/
