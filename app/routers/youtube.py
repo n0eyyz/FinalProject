@@ -49,7 +49,7 @@ async def process_youtube_url_and_get_places(
 
     # 2. Celery가 없으므로 직접 함수를 호출합니다.
     try:
-        result = await process_youtube_url(request.url, user_id)
+        result = await process_youtube_url(db, request.url, user_id)
         if result.get('status') == 'Failure':
             raise HTTPException(status_code=400, detail=result.get('message'))
         
