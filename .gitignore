@@ -23,6 +23,7 @@ venv/
 env/
 .env/
 /.env
+workingwell/
 
 # Database
 *.sqlite3
