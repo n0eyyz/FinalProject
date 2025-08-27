@@ -7,6 +7,7 @@ import asyncio
 # Google Maps 검증 서비스 임포트
 from app.services.maps_verifier import GoogleMapsVerifier, LocationInfo
 
+
 class GeminiService:
     """
     Google Gemini API를 사용하여 텍스트에서 위치 정보를 추출하고,
@@ -15,7 +16,7 @@ class GeminiService:
 
     def __init__(self):
         # 프롬프트 내 예시 JSON의 중괄호를 {{, }}로 이스케이프 처리
-        self.prompt_template = '''You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
+        self.prompt_template = """You are an expert AI specializing in analyzing YouTube food vlogs to extract restaurant and cafe names.
 Your task is to identify all the specific names of places like restaurants, cafes, bakeries, and food stalls that the vlogger visits or mentions in the provided script.
 
 **Instructions:**
@@ -40,13 +41,13 @@ Correct Output:
 Text: "{transcript}"
 ---
 JSON Result:
-'''
-        self.region_prompt_template = '''From the following text, identify the primary city or metropolitan area that is the main setting.
+"""
+        self.region_prompt_template = """From the following text, identify the primary city or metropolitan area that is the main setting.
 Respond with only the name of the city and province/state (e.g., "Suwon, Gyeonggi-do", "Seoul").
 Do not add any other explanatory text.
 
 Text: "{transcript}"
-Region: '''
+Region: """
         # Google Maps 검증기 인스턴스 생성
         self.verifier = GoogleMapsVerifier()
 
@@ -81,19 +82,21 @@ Region: '''
         # 2. Gemini API를 통해 장소 후보 목록 추출
         print("➡️ Gemini API로 장소 후보 추출을 시작합니다.")
         prompt = self.prompt_template.format(transcript=transcript)
-        
+
         model_name = "gemini-1.5-flash"
         model = genai.GenerativeModel(model_name)
         response = None
         try:
             response = await model.generate_content_async(prompt)
-            
+
             if hasattr(response, "text") and response.text:
                 result_text = response.text.strip().lstrip("```json").rstrip("```")
                 # JSON 파싱 전, 불필요한 후행 쉼표 제거
                 result_text = re.sub(r",\s*([\}\]])", r"\1", result_text)
                 candidate_locations = json.loads(result_text)
-                print(f"✅ Gemini가 {len(candidate_locations)}개의 장소 후보를 추출했습니다.")
+                print(
+                    f"✅ Gemini가 {len(candidate_locations)}개의 장소 후보를 추출했습니다."
+                )
             else:
                 print("❌ Gemini 응답에서 텍스트를 찾을 수 없습니다.")
                 return []
@@ -107,23 +110,20 @@ Region: '''
         # 3. Google Maps API로 검증
         if not candidate_locations:
             return []
-            
+
         print(f"➡️ Google Maps로 후보 장소 검증을 시작합니다. (지역: {region or 'N/A'})")
         locations_to_verify = [
-            LocationInfo(
-                name=loc.get("name"),
-                lat=loc.get("lat"),
-                lng=loc.get("lng")
-            )
-            for loc in candidate_locations if loc.get("name")
+            LocationInfo(name=loc.get("name"), lat=loc.get("lat"), lng=loc.get("lng"))
+            for loc in candidate_locations
+            if loc.get("name")
         ]
 
         verified_locations_info = await self.verifier.verify_locations_batch(
             locations_to_verify, region_context=region
         )
-        
+
         # 최종 결과를 딕셔너리 리스트로 변환
         final_locations = [loc.to_dict() for loc in verified_locations_info]
-        
+
         print(f"✅ 검증 완료. 최종 {len(final_locations)}개의 장소가 확인되었습니다.")
         return final_locations
